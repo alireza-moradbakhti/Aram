@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 400" width="1280" height="400" role="img" aria-labelledby="title desc">
+  <title id="title">Aram — save smarter, spend calmer</title>
+  <desc id="desc">Aram brand banner: the safe-to-spend card on a calm dark teal background.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B1512"/>
+      <stop offset="1" stop-color="#0E2A22"/>
+    </linearGradient>
+    <radialGradient id="glowTeal" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#0E9F6E" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#0E9F6E" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowAmber" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#D97706" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#D97706" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#16342B"/>
+      <stop offset="1" stop-color="#0F231D"/>
+    </linearGradient>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6FDDB5"/>
+      <stop offset="1" stop-color="#0E9F6E"/>
+    </linearGradient>
+    <pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse">
+      <circle cx="1.5" cy="1.5" r="1.5" fill="#DCE5E0" fill-opacity="0.055"/>
+    </pattern>
+  </defs>
+
+  <rect width="1280" height="400" fill="url(#bg)"/>
+  <rect width="1280" height="400" fill="url(#dots)"/>
+  <ellipse cx="1120" cy="120" rx="330" ry="260" fill="url(#glowTeal)"/>
+  <ellipse cx="700" cy="420" rx="280" ry="200" fill="url(#glowAmber)"/>
+
+  <!-- brand mark -->
+  <g transform="translate(88 72)">
+    <rect width="58" height="58" rx="17" fill="url(#brand)"/>
+    <path d="M17 21.5h19.5a5 5 0 0 1 5 5V38a3 3 0 0 1-3 3H17a3 3 0 0 1-3-3V24.5a3 3 0 0 1 3-3Z" fill="none" stroke="#06281E" stroke-width="2.6"/>
+    <path d="M38.5 26.5h4.5a3 3 0 0 1 3 3V34a3 3 0 0 1-3 3h-4.5" fill="none" stroke="#06281E" stroke-width="2.6"/>
+    <circle cx="24.5" cy="30.5" r="1.8" fill="#06281E"/>
+  </g>
+
+  <text x="88" y="222" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="94" font-weight="700" letter-spacing="-3" fill="#F3F8F5">Aram</text>
+  <text x="330" y="212" font-family="Tahoma, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="32" fill="#8FB5A7" opacity="0.75">آرام</text>
+
+  <text x="90" y="266" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="25" fill="#A7BDB4">Save smarter. Spend calmer.</text>
+
+  <g transform="translate(90 300)">
+    <rect width="330" height="38" rx="19" fill="#0E9F6E" fill-opacity="0.10" stroke="#0E9F6E" stroke-opacity="0.35"/>
+    <text x="20" y="24" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="600" letter-spacing="2.4" fill="#6FDDB5">OFFLINE-FIRST ANDROID COMPANION</text>
+  </g>
+
+  <!-- safe-to-spend card stack -->
+  <g transform="translate(806 56) rotate(-3 200 140)">
+    <rect x="18" y="22" width="380" height="280" rx="30" fill="#D97706" fill-opacity="0.14" stroke="#D97706" stroke-opacity="0.25"/>
+    <rect width="380" height="280" rx="30" fill="url(#card)" stroke="#2A4A3E"/>
+    <text x="34" y="48" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="600" letter-spacing="2.2" fill="#8FB5A7">SAFE TO SPEND</text>
+    <text x="34" y="112" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="54" font-weight="700" letter-spacing="-1.5" fill="#F3F8F5">$42.50</text>
+    <text x="228" y="112" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="17" fill="#8FB5A7">/ day</text>
+    <text x="34" y="140" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" fill="#6FDDB5">6 days left this month</text>
+
+    <rect x="34" y="164" width="312" height="8" rx="4" fill="#253F35"/>
+    <rect x="34" y="164" width="228" height="8" rx="4" fill="#0E9F6E"/>
+
+    <g transform="translate(34 196)">
+      <text font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" letter-spacing="1.6" fill="#8FB5A7">SPENT</text>
+      <text y="22" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="18" font-weight="600" fill="#F3F8F5">$1,840.20</text>
+    </g>
+    <line x1="200" y1="196" x2="200" y2="244" stroke="#2A4A3E"/>
+    <g transform="translate(224 196)">
+      <text font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" letter-spacing="1.6" fill="#8FB5A7">LEFT IN BUDGET</text>
+      <text y="22" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="18" font-weight="600" fill="#FFB95C">$760.00</text>
+    </g>
+  </g>
+
+  <!-- donut accent -->
+  <g transform="translate(1080 286)">
+    <circle r="34" fill="#0F231D" stroke="#2A4A3E" stroke-width="10"/>
+    <circle r="34" fill="none" stroke="#0E9F6E" stroke-width="10" stroke-linecap="round" stroke-dasharray="120 214" transform="rotate(-90)"/>
+    <circle r="34" fill="none" stroke="#FFB95C" stroke-width="10" stroke-linecap="round" stroke-dasharray="48 214" stroke-dashoffset="-126" transform="rotate(-90)"/>
+  </g>
+</svg>

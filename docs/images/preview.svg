@@ -1,0 +1,190 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 840" width="1400" height="840" role="img" aria-labelledby="title desc">
+  <title id="title">Aram app — design preview</title>
+  <desc id="desc">Two phone mockups showing the Aram home dashboard and savings goals screens in dark mode.</desc>
+
+  <defs>
+    <linearGradient id="page" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F2F8F5"/>
+      <stop offset="1" stop-color="#E4EFEA"/>
+    </linearGradient>
+    <linearGradient id="safe" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#12B57D"/>
+      <stop offset="1" stop-color="#0B7D57"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#0E9F6E" stop-opacity="0.20"/>
+      <stop offset="1" stop-color="#0E9F6E" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="22" stdDeviation="26" flood-color="#0B1512" flood-opacity="0.20"/>
+    </filter>
+    <clipPath id="screenA"><rect x="316" y="94" width="316" height="636" rx="42"/></clipPath>
+    <clipPath id="screenB"><rect x="796" y="94" width="316" height="636" rx="42"/></clipPath>
+  </defs>
+
+  <rect width="1400" height="840" fill="url(#page)"/>
+  <circle cx="240" cy="180" r="260" fill="url(#halo)"/>
+  <circle cx="1190" cy="640" r="300" fill="url(#halo)"/>
+  <pattern id="grid" width="56" height="56" patternUnits="userSpaceOnUse">
+    <path d="M56 0H0V56" fill="none" stroke="#0E9F6E" stroke-opacity="0.055" stroke-width="1"/>
+  </pattern>
+  <rect width="1400" height="840" fill="url(#grid)"/>
+
+  <!-- ================= PHONE A : HOME ================= -->
+  <g filter="url(#shadow)">
+    <rect x="296" y="74" width="356" height="676" rx="60" fill="#0B1512" stroke="#233D34" stroke-width="2"/>
+    <rect x="308" y="86" width="332" height="652" rx="48" fill="#0B1512"/>
+  </g>
+  <g clip-path="url(#screenA)">
+    <rect x="316" y="94" width="316" height="636" fill="#0B1512"/>
+
+    <!-- status bar -->
+    <text x="338" y="122" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#DCE5E0">9:41</text>
+    <rect x="586" y="111" width="20" height="10" rx="3" fill="#DCE5E0"/>
+    <rect x="568" y="113" width="14" height="8" rx="2" fill="#DCE5E0" opacity="0.55"/>
+
+    <!-- greeting -->
+    <text x="338" y="170" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#8FB5A7">Good morning</text>
+    <text x="338" y="192" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#F3F8F5">Alireza</text>
+    <circle cx="598" cy="176" r="19" fill="#16342B" stroke="#2A4A3E"/>
+    <text x="598" y="182" text-anchor="middle" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#6FDDB5">A</text>
+
+    <!-- safe to spend -->
+    <rect x="338" y="212" width="272" height="150" rx="24" fill="url(#safe)"/>
+    <text x="360" y="244" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10" font-weight="700" letter-spacing="1.8" fill="#DFF7EE" opacity="0.85">SAFE TO SPEND</text>
+    <text x="360" y="292" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="36" font-weight="700" letter-spacing="-1" fill="#FFFFFF">$42.50</text>
+    <text x="500" y="292" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#DFF7EE" opacity="0.9">/ day</text>
+    <text x="360" y="316" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#DFF7EE" opacity="0.9">6 days left this month</text>
+    <rect x="360" y="332" width="228" height="7" rx="3.5" fill="#FFFFFF" opacity="0.22"/>
+    <rect x="360" y="332" width="166" height="7" rx="3.5" fill="#FFFFFF" opacity="0.9"/>
+
+    <!-- month in / out -->
+    <rect x="338" y="376" width="130" height="62" rx="17" fill="#101C18" stroke="#233D34"/>
+    <text x="354" y="398" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="9.5" letter-spacing="1.2" fill="#8FB5A7">IN</text>
+    <text x="354" y="424" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#6FDDB5">+$3,200</text>
+    <rect x="480" y="376" width="130" height="62" rx="17" fill="#101C18" stroke="#233D34"/>
+    <text x="496" y="398" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="9.5" letter-spacing="1.2" fill="#8FB5A7">OUT</text>
+    <text x="496" y="424" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#FFB95C">−$1,840</text>
+
+    <!-- spending section -->
+    <text x="338" y="474" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#F3F8F5">This month</text>
+    <text x="590" y="474" text-anchor="end" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" fill="#6FDDB5">See all</text>
+
+    <!-- donut -->
+    <g transform="translate(392 532)">
+      <circle r="44" fill="none" stroke="#1B2F28" stroke-width="14"/>
+      <circle r="44" fill="none" stroke="#0E9F6E" stroke-width="14" stroke-linecap="butt" stroke-dasharray="124 277" transform="rotate(-90)"/>
+      <circle r="44" fill="none" stroke="#FFB95C" stroke-width="14" stroke-dasharray="69 277" stroke-dashoffset="-124" transform="rotate(-90)"/>
+      <circle r="44" fill="none" stroke="#4F8EF7" stroke-width="14" stroke-dasharray="50 277" stroke-dashoffset="-193" transform="rotate(-90)"/>
+      <circle r="44" fill="none" stroke="#8FB5A7" stroke-width="14" stroke-dasharray="34 277" stroke-dashoffset="-243" transform="rotate(-90)"/>
+      <text y="4" text-anchor="middle" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#F3F8F5">$1,840</text>
+    </g>
+
+    <g font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" fill="#BEC9C3">
+      <circle cx="470" cy="512" r="4" fill="#0E9F6E"/><text x="482" y="516">Food · 45%</text>
+      <circle cx="470" cy="534" r="4" fill="#FFB95C"/><text x="482" y="538">Transport · 25%</text>
+      <circle cx="470" cy="556" r="4" fill="#4F8EF7"/><text x="482" y="560">Fun · 18%</text>
+      <circle cx="470" cy="578" r="4" fill="#8FB5A7"/><text x="482" y="582">Other · 12%</text>
+    </g>
+
+    <!-- recent rows -->
+    <line x1="338" y1="606" x2="610" y2="606" stroke="#1B2F28"/>
+    <g transform="translate(338 622)">
+      <circle cx="15" cy="15" r="15" fill="#16342B"/>
+      <text x="15" y="20" text-anchor="middle" font-size="11" fill="#6FDDB5">🍜</text>
+      <text x="42" y="12" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" fill="#F3F8F5">Ramen night</text>
+      <text x="42" y="27" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="9.5" fill="#8FB5A7">Food · Today</text>
+      <text x="272" y="18" text-anchor="end" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="600" fill="#F3F8F5">−$18.40</text>
+    </g>
+    <g transform="translate(338 668)">
+      <circle cx="15" cy="15" r="15" fill="#2C2415"/>
+      <text x="15" y="20" text-anchor="middle" font-size="11" fill="#FFB95C">🚕</text>
+      <text x="42" y="12" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" fill="#F3F8F5">Ride home</text>
+      <text x="42" y="27" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="9.5" fill="#8FB5A7">Transport · Yesterday</text>
+      <text x="272" y="18" text-anchor="end" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="600" fill="#F3F8F5">−$9.10</text>
+    </g>
+
+    <!-- bottom nav -->
+    <rect x="316" y="702" width="316" height="28" fill="#0B1512"/>
+    <g transform="translate(338 708)" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="8" text-anchor="middle">
+      <circle cx="16" cy="8" r="10" fill="#0E9F6E" opacity="0.16"/>
+      <path d="M11 10.5 16 6l5 4.5V15h-3.4v-3h-3.2v3H11Z" fill="#6FDDB5"/>
+      <text x="16" y="28" fill="#6FDDB5" font-weight="600">Home</text>
+      <path d="M96 6h10M96 10h10M96 14h6" stroke="#8FB5A7" stroke-width="1.6" stroke-linecap="round"/>
+      <text x="101" y="28" fill="#8FB5A7">Activity</text>
+      <path d="M181 6h10v9h-10z" stroke="#8FB5A7" stroke-width="1.4" fill="none"/>
+      <path d="M183 12h6" stroke="#8FB5A7" stroke-width="1.4"/>
+      <text x="186" y="28" fill="#8FB5A7">Budgets</text>
+      <circle cx="271" cy="9" r="5" fill="none" stroke="#8FB5A7" stroke-width="1.6"/>
+      <path d="M271 4v5l3 2" stroke="#8FB5A7" stroke-width="1.6" fill="none"/>
+      <text x="271" y="28" fill="#8FB5A7">Goals</text>
+    </g>
+  </g>
+
+  <!-- ================= PHONE B : GOALS ================= -->
+  <g filter="url(#shadow)">
+    <rect x="776" y="74" width="356" height="676" rx="60" fill="#0B1512" stroke="#233D34" stroke-width="2"/>
+    <rect x="788" y="86" width="332" height="652" rx="48" fill="#0B1512"/>
+  </g>
+  <g clip-path="url(#screenB)">
+    <rect x="796" y="94" width="316" height="636" fill="#0B1512"/>
+
+    <text x="818" y="122" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#DCE5E0">9:41</text>
+    <rect x="1066" y="111" width="20" height="10" rx="3" fill="#DCE5E0"/>
+    <rect x="1048" y="113" width="14" height="8" rx="2" fill="#DCE5E0" opacity="0.55"/>
+
+    <text x="818" y="184" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="25" font-weight="700" fill="#F3F8F5">Goals</text>
+    <text x="818" y="206" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" fill="#8FB5A7">Small steps, kept steady.</text>
+    <circle cx="1086" cy="180" r="18" fill="#0E9F6E"/>
+    <path d="M1086 172v16M1078 180h16" stroke="#06281E" stroke-width="2.2" stroke-linecap="round"/>
+
+    <!-- goal card 1 -->
+    <rect x="818" y="228" width="272" height="196" rx="24" fill="#101C18" stroke="#233D34"/>
+    <g transform="translate(872 286)">
+      <circle r="34" fill="none" stroke="#1B2F28" stroke-width="9"/>
+      <circle r="34" fill="none" stroke="#0E9F6E" stroke-width="9" stroke-linecap="round" stroke-dasharray="145 214" transform="rotate(-90)"/>
+      <text y="4" text-anchor="middle" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#F3F8F5">68%</text>
+    </g>
+    <text x="928" y="272" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#F3F8F5">Japan trip</text>
+    <text x="928" y="292" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" fill="#8FB5A7">$4,100 of $6,000</text>
+    <rect x="928" y="304" width="56" height="20" rx="10" fill="#2C2415"/>
+    <text x="956" y="318" text-anchor="middle" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="9.5" font-weight="600" fill="#FFB95C">🔥 6 wk</text>
+
+    <line x1="842" y1="356" x2="1066" y2="356" stroke="#1B2F28"/>
+    <text x="842" y="380" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10" fill="#8FB5A7">Target date</text>
+    <text x="842" y="398" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="600" fill="#F3F8F5">March 2027</text>
+    <text x="1066" y="380" text-anchor="end" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10" fill="#8FB5A7">Monthly pace</text>
+    <text x="1066" y="398" text-anchor="end" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="600" fill="#6FDDB5">$380 / mo</text>
+
+    <!-- goal card 2 -->
+    <rect x="818" y="440" width="272" height="152" rx="24" fill="#101C18" stroke="#233D34"/>
+    <g transform="translate(872 486)">
+      <circle r="27" fill="none" stroke="#1B2F28" stroke-width="8"/>
+      <circle r="27" fill="none" stroke="#FFB95C" stroke-width="8" stroke-linecap="round" stroke-dasharray="76 170" transform="rotate(-90)"/>
+      <text y="4" text-anchor="middle" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" font-weight="700" fill="#F3F8F5">45%</text>
+    </g>
+    <text x="912" y="474" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#F3F8F5">Emergency fund</text>
+    <text x="912" y="492" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" fill="#8FB5A7">$2,700 of $6,000</text>
+    <rect x="912" y="504" width="66" height="20" rx="10" fill="#2C2415"/>
+    <text x="945" y="518" text-anchor="middle" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="9.5" font-weight="600" fill="#FFB95C">🔥 3 wk</text>
+    <line x1="842" y1="540" x2="1066" y2="540" stroke="#1B2F28"/>
+    <text x="842" y="564" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10" fill="#8FB5A7">No deadline · keep going</text>
+
+    <!-- add money -->
+    <rect x="818" y="610" width="272" height="48" rx="24" fill="#0E9F6E"/>
+    <text x="954" y="640" text-anchor="middle" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#FFFFFF">Add money</text>
+
+    <!-- nav -->
+    <g transform="translate(818 708)" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="8" text-anchor="middle">
+      <text x="16" y="28" fill="#8FB5A7">Home</text>
+      <text x="101" y="28" fill="#8FB5A7">Activity</text>
+      <text x="186" y="28" fill="#8FB5A7">Budgets</text>
+      <circle cx="271" cy="9" r="10" fill="#0E9F6E" opacity="0.16"/>
+      <circle cx="271" cy="9" r="5" fill="none" stroke="#6FDDB5" stroke-width="1.6"/>
+      <path d="M271 4v5l3 2" stroke="#6FDDB5" stroke-width="1.6" fill="none"/>
+      <text x="271" y="28" fill="#6FDDB5" font-weight="600">Goals</text>
+    </g>
+  </g>
+
+  <text x="700" y="802" text-anchor="middle" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#5D756A">Design preview · implementation tracked milestone by milestone</text>
+</svg>
