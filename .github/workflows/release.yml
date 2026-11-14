@@ -33,10 +33,10 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Build and test
-        run: ./gradlew :app:assembleDebug testDebugUnitTest --stacktrace
+        run: ./gradlew :app:assembleProdRelease test -PbuildDate=$(date -u +%Y%m%d) --stacktrace
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk "aram-${GITHUB_REF_NAME}-preview.apk"
+        run: cp app/build/outputs/apk/prod/release/*.apk "aram-${GITHUB_REF_NAME}-preview.apk"
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v3

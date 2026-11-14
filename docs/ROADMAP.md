@@ -4,7 +4,7 @@ This is how Aram gets from a skeleton to a real product. Work is sliced into fiv
 
 - **Cadence:** 2-week sprints, 7–8 issues each, roughly 20–25 focused hours per sprint.
 - **Flow:** Todo → In Progress → In Review → Done.
-- **Definition of done:** acceptance criteria met, tests added where logic changed, `./gradlew :app:assembleDebug testDebugUnitTest` green, CI green, docs updated if behavior changed.
+- **Definition of done:** acceptance criteria met, tests added where logic changed, `./gradlew :app:assembleAlphaDebug test` green, CI green, docs updated if behavior changed.
 - **Scope rule:** an issue that does not fit a sprint goes back to the backlog instead of stretching the sprint.
 
 ## Sprint 1 — Transactions foundation

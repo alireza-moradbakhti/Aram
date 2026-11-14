@@ -13,8 +13,8 @@ Thanks for taking a look. Aram is a portfolio project, but it is run like a real
 ```bash
 git clone https://github.com/alireza-moradbakhti/Aram.git
 cd Aram
-./gradlew :app:assembleDebug
-./gradlew testDebugUnitTest
+./gradlew :app:assembleAlphaDebug
+./gradlew test
 ```
 
 Requirements: JDK 21, Android SDK Platform 37, Android Studio latest stable.
@@ -33,7 +33,7 @@ Requirements: JDK 21, Android SDK Platform 37, Android Studio latest stable.
    - `docs: document sync-ready schema`
 3. Run the checks locally:
    ```bash
-   ./gradlew :app:assembleDebug testDebugUnitTest
+   ./gradlew :app:assembleAlphaDebug test
    ```
 4. Open a pull request using the template. Keep it focused; unrelated refactors belong in their own PR.
 
@@ -47,11 +47,19 @@ Requirements: JDK 21, Android SDK Platform 37, Android Studio latest stable.
 - No analytics, tracking, or network dependencies in the MVP.
 - Add a comment only when the *why* is non-obvious.
 
+## Build and release conventions
+
+- Develop and preview with `alphaDebug` or `betaDebug`; verify release behavior with `prodRelease`.
+- Bump `aram.versionName` and `aram.versionCode` in `gradle.properties` before tagging a release.
+- Never commit a keystore, `.env`, or signing passwords. Release signing values belong in `.env` or environment variables.
+- Keep the R8 mapping file (`app/build/outputs/mapping/prodRelease/mapping.txt`) with the release it belongs to.
+- APKs are named `aram-<stage>-<buildType>-<versionCode>-<yyyyMMdd>.apk`; do not rename build outputs by hand.
+
 ## Definition of done
 
 - [ ] Acceptance criteria in the linked issue are met
 - [ ] New business logic has unit tests
-- [ ] `./gradlew :app:assembleDebug testDebugUnitTest` passes
+- [ ] `./gradlew :app:assembleAlphaDebug test` passes
 - [ ] CI is green
 - [ ] README/spec updated if behavior or architecture changed
 
