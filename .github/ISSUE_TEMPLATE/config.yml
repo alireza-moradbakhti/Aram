@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/alireza-moradbakhti/Aram/security/advisories/new
+    about: Report security issues privately, not as a public issue.
+  - name: Product spec
+    url: https://github.com/alireza-moradbakhti/Aram/blob/main/docs/SPEC.md
+    about: Read the product and architecture rules before proposing changes.

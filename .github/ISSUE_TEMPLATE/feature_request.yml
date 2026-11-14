@@ -1,0 +1,45 @@
+name: Feature request
+description: Suggest a capability or a change in behavior
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check the [project board](https://github.com/alireza-moradbakhti/Aram/projects) and [docs/SPEC.md](https://github.com/alireza-moradbakhti/Aram/blob/main/docs/SPEC.md) first — the idea may already be planned.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the user need, not just the proposed implementation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How should it work? Include alternatives considered.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - P0 — blocks the MVP
+        - P1 — post-MVP improvement
+        - P2 — nice to have
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Product constraints
+      options:
+        - label: This does not require network access in the MVP
+        - label: This does not add analytics or third-party tracking
+        - label: This keeps financial data on-device
