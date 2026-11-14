@@ -1,0 +1,8 @@
+<resources>
+    <string name="welcome_tagline">Save smarter. Spend calmer.</string>
+    <string name="welcome_name_label">What should we call you?</string>
+    <string name="welcome_name_error">Enter your name to continue</string>
+    <string name="welcome_save_error">Could not save your profile. Try again.</string>
+    <string name="welcome_create_profile">Get started</string>
+    <string name="welcome_privacy_note">Your data stays on this device.</string>
+</resources>
