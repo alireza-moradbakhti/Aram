@@ -35,6 +35,14 @@ jobs:
       - name: Build and test
         run: ./gradlew :app:assembleProdRelease test -PbuildDate=$(date -u +%Y%m%d) --stacktrace
 
+      - name: Upload R8 mapping
+        uses: actions/upload-artifact@v7
+        with:
+          name: aram-prod-release-mapping
+          path: app/build/outputs/mapping/prodRelease/mapping.txt
+          if-no-files-found: error
+          retention-days: 90
+
       - name: Rename APK
         run: cp app/build/outputs/apk/prod/release/*.apk "aram-${GITHUB_REF_NAME}-preview.apk"
 

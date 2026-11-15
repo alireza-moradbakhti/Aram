@@ -49,10 +49,11 @@ Requirements: JDK 21, Android SDK Platform 37, Android Studio latest stable.
 
 ## Build and release conventions
 
-- Develop and preview with `alphaDebug` or `betaDebug`; verify release behavior with `prodRelease`.
+- Develop, preview, and test everything on `alphaDebug` — it is the only variant CI builds and the APK that goes on a real phone.
+- Cut `beta`/`prod` builds only when alpha has fully passed on a device and a release is being prepared. `prodRelease` is then verified once more before tagging.
 - Bump `aram.versionName` and `aram.versionCode` in `gradle.properties` before tagging a release.
 - Never commit a keystore, `.env`, or signing passwords. Release signing values belong in `.env` or environment variables.
-- Keep the R8 mapping file (`app/build/outputs/mapping/prodRelease/mapping.txt`) with the release it belongs to.
+- Keep the R8 mapping file (`app/build/outputs/mapping/prodRelease/mapping.txt`) with the release it belongs to; the release workflow archives it as an artifact.
 - APKs are named `aram-<stage>-<buildType>-<versionCode>-<yyyyMMdd>.apk`; do not rename build outputs by hand.
 
 ## Definition of done

@@ -219,10 +219,10 @@ Package root: `com.aram` · application id: `com.aram.app`.
 git clone https://github.com/alireza-moradbakhti/Aram.git
 cd Aram
 
-# Alpha debug build
+# Alpha debug build — the test APK every change goes through
 ./gradlew :app:assembleAlphaDebug
 
-# Minified prod release build (R8 + resource shrinking)
+# Release build — cut only after alpha has fully passed on a real device
 ./gradlew :app:assembleProdRelease
 
 # Unit tests (JVM, no device needed)
@@ -246,7 +246,8 @@ The app uses one flavor dimension (`stage`) and two build types (`debug`, `relea
 
 - APKs are named `aram-<stage>-<buildType>-<versionCode>-<yyyyMMdd>.apk`, e.g. `aram-alpha-debug-1-20261114.apk`. Pass `-PbuildDate=20261114` for reproducible names; CI sets it automatically.
 - Version name and code live in [`gradle.properties`](gradle.properties) (`aram.versionName`, `aram.versionCode`); bump both before a release.
-- Release variants use R8 and resource shrinking. The mapping file is written to `app/build/outputs/mapping/prodRelease/mapping.txt` — archive it for deobfuscating crash reports.
+- `alphaDebug` is the delivery gate: CI builds and uploads only this variant, and it is the APK that gets installed on a real phone. `beta` and `prod` builds are cut at release time, after alpha has passed, so a broken preview never reaches a release artifact.
+- Release variants use R8 and resource shrinking. The mapping file is written to `app/build/outputs/mapping/prodRelease/mapping.txt` — the release workflow archives it for deobfuscating crash reports.
 - Release signing reads `ARAM_KEYSTORE_PATH`, `ARAM_KEYSTORE_PASSWORD`, `ARAM_KEY_ALIAS`, and `ARAM_KEY_PASSWORD` from the environment or the gitignored `.env` file. Without a keystore it falls back to the debug key and logs a warning, which keeps preview releases buildable on any machine.
 - `alpha` and `beta` carry an application-id suffix, so they can be installed next to each other and next to prod.
 
@@ -304,8 +305,10 @@ The project follows one rule: **business math is pure Kotlin and fast to test.**
 Every push and pull request to `main` or `dev` runs on a clean Ubuntu runner:
 
 1. Checkout, JDK 21, Android SDK 37
-2. `./gradlew :app:assembleAlphaDebug :app:assembleProdRelease test`
-3. Upload the alpha debug and minified release APKs plus the R8 mapping; on failure, the test reports
+2. `./gradlew :app:assembleAlphaDebug test`
+3. Upload the alpha test APK; on failure, the test reports
+
+Minified `beta`/`prod` builds are **not** built in CI. They are produced by the release workflow, only when alpha has been tested on a device and a release is being cut.
 
 Pushing a `v*` tag publishes a GitHub Release with a preview APK:
 
@@ -342,7 +345,7 @@ This is primarily a portfolio and learning project, but feedback and issues are 
 **Release hardening**
 - `prodRelease` runs R8 with resource shrinking, so class and member names are obfuscated and unused code is removed.
 - Debug and verbose `Log` calls are stripped from release builds.
-- The R8 mapping file is archived privately with each release (CI artifact, 90 days) and never committed. Debug-signed preview APKs are clearly previews, not store builds.
+- The R8 mapping file is archived privately with each release (release workflow artifact, 90 days) and never committed. Debug-signed preview APKs are clearly previews, not store builds.
 - Signing uses a private keystore; its path, passwords, and aliases come from environment variables or the gitignored `.env`.
 
 **Keys and secrets**
