@@ -1,0 +1,44 @@
+name: Clean up merged branch
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+
+jobs:
+  delete-head-branch:
+    name: Delete merged head branch
+    # Only merge commits into dev; never touch dev or main, never fork branches.
+    if: |
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == 'dev' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref != 'dev' &&
+      github.event.pull_request.head.ref != 'main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Delete head branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          REF_ID=$(gh api graphql \
+            -f query='query($owner:String!,$name:String!,$ref:String!){repository(owner:$owner,name:$name){ref(qualifiedName:$ref){id}}}' \
+            -f owner="${GITHUB_REPOSITORY%/*}" \
+            -f name="${GITHUB_REPOSITORY#*/}" \
+            -f ref="refs/heads/$BRANCH" \
+            --jq '.data.repository.ref.id // empty')
+
+          if [ -z "$REF_ID" ]; then
+            echo "Branch $BRANCH is already gone."
+            exit 0
+          fi
+
+          gh api graphql \
+            -f query='mutation($ref:ID!){deleteRef(input:{refId:$ref}){clientMutationId}}' \
+            -f ref="$REF_ID" > /dev/null
+
+          echo "Deleted $BRANCH after merge into dev."
