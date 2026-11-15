@@ -2,8 +2,10 @@ package com.aram.feature.onboarding.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dagger.hilt.android.lifecycle.HiltViewModel
+import com.aram.core.designsystem.state.SubmitState
 import com.aram.core.domain.repository.AuthRepository
+import com.aram.core.model.Outcome
+import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,25 +23,28 @@ class WelcomeViewModel @Inject constructor(
 
     fun onNameChange(name: String) {
         _uiState.update {
-            it.copy(name = name, showNameError = false, showSaveError = false)
+            it.copy(name = name, showNameError = false, submitState = SubmitState.Idle)
         }
     }
 
     fun onCreateProfile() {
-        val name = _uiState.value.name.trim()
+        val current = _uiState.value
+        if (current.submitState is SubmitState.Submitting) return
+
+        val name = current.name.trim()
         if (name.isEmpty()) {
             _uiState.update { it.copy(showNameError = true) }
             return
         }
 
-        _uiState.update { it.copy(isSubmitting = true, showSaveError = false) }
+        _uiState.update { it.copy(submitState = SubmitState.Submitting) }
         viewModelScope.launch {
-            runCatching { authRepository.createLocalProfile(name) }
-                .onFailure {
-                    _uiState.update {
-                        it.copy(isSubmitting = false, showSaveError = true)
-                    }
+            when (val result = authRepository.createLocalProfile(name)) {
+                is Outcome.Success -> Unit
+                is Outcome.Failure -> _uiState.update {
+                    it.copy(submitState = SubmitState.Failed(result.error))
                 }
+            }
         }
     }
 }

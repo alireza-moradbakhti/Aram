@@ -81,7 +81,8 @@ android {
             dimension = "stage"
             applicationIdSuffix = ".alpha"
             versionNameSuffix = "-alpha"
-            manifestPlaceholders["appName"] = "Aram Alpha"
+            // Launcher label stays "Aram" across stages; the alpha icon carries the marker.
+            manifestPlaceholders["appName"] = "Aram"
             buildConfigField("String", "BUILD_STAGE", "\"alpha\"")
             buildConfigField("boolean", "IS_PRE_RELEASE", "true")
         }

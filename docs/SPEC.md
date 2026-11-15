@@ -391,6 +391,8 @@ Outbox worker (:core:data) → sync_outbox → /sync/push → backend
 | Layer | Tool | What |
 |---|---|---|
 | Pure Kotlin | JUnit 4 | `Money` arithmetic/formatting (done), date/period calculators, safe-to-spend logic |
+| Errors | JUnit + coroutines-test | `Throwable → AppError`, `safeOutcome` (cancellation rethrown, logged once), `UiState` and `SubmitState` transitions, retry re-subscribes |
+| Static | Gradle `verifyNoNotNullAssertions` | fails the build when `!!` appears anywhere under `src/main` |
 | Network | Ktor `MockEngine` + contract fixtures | DTO shapes against [API_CONTRACT.md](API_CONTRACT.md), auth refresh, error mapping, timeouts |
 | Repositories | JUnit + Turbine + fakes | Cache-first reads, refresh upserts, offline fallback, outbox writes, conflict handling |
 | Outbox | coroutines-test + fake worker | FIFO ordering, idempotency reuse, backoff, permanent-failure state |
@@ -448,6 +450,9 @@ Rule: business math is pure Kotlin and lives in `:core:money` / `:core:domain` �
 - Tokens live in Keystore-backed storage; access tokens are short-lived and
   refresh tokens rotate. Nothing sensitive is logged — no amounts, notes, emails,
   tokens, or account numbers.
+- Uncaught exceptions are reported once through `Logger` (component + stack
+  trace, never user content), and the next launch offers a recovery screen. No
+  crash SDK is bundled.
 - Cleartext HTTP is disabled in release builds; a debug-only network security
   config may allow a local backend.
 - Server-side ownership checks are mandatory: a client-supplied `user_id` is

@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aram.core.designsystem.AramTheme
+import com.aram.core.designsystem.state.SubmitState
 import com.aram.feature.onboarding.R
 
 @Composable
@@ -61,6 +62,9 @@ fun WelcomeScreen(
     onCreateProfile: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val isSubmitting = uiState.submitState is SubmitState.Submitting
+    val hasSubmitError = uiState.submitState is SubmitState.Failed
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -124,11 +128,11 @@ fun WelcomeScreen(
                 supportingText = {
                     if (uiState.showNameError) {
                         Text(stringResource(R.string.welcome_name_error))
-                    } else if (uiState.showSaveError) {
+                    } else if (hasSubmitError) {
                         Text(stringResource(R.string.welcome_save_error))
                     }
                 },
-                enabled = !uiState.isSubmitting,
+                enabled = !isSubmitting,
                 keyboardOptions = KeyboardOptions(
                     capitalization = KeyboardCapitalization.Words,
                     imeAction = ImeAction.Done,
@@ -141,12 +145,12 @@ fun WelcomeScreen(
 
             Button(
                 onClick = onCreateProfile,
-                enabled = !uiState.isSubmitting,
+                enabled = !isSubmitting,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
             ) {
-                if (uiState.isSubmitting) {
+                if (isSubmitting) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(20.dp),
                         strokeWidth = 2.dp,

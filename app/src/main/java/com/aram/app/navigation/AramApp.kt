@@ -18,6 +18,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -26,7 +27,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.aram.app.session.SessionState
+import com.aram.core.designsystem.component.ErrorState
+import com.aram.core.designsystem.state.UiState
 import com.aram.core.model.UserProfile
 import com.aram.feature.budgets.presentation.BudgetsScreen
 import com.aram.feature.dashboard.presentation.DashboardRoute
@@ -37,22 +39,37 @@ import com.aram.feature.transactions.presentation.TransactionsScreen
 
 @Composable
 fun AramApp(
-    sessionState: SessionState,
+    sessionState: UiState<UserProfile>,
+    onRetrySession: () -> Unit,
+    showDebugActions: Boolean,
     modifier: Modifier = Modifier,
 ) {
     when (sessionState) {
-        SessionState.Loading -> Box(
+        UiState.Loading -> Box(
             modifier = modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background),
         )
 
-        SessionState.LoggedOut -> WelcomeRoute(modifier = modifier)
+        UiState.Empty -> WelcomeRoute(modifier = modifier)
 
-        is SessionState.Ready -> MainScaffold(
-            profile = sessionState.profile,
+        is UiState.Content -> MainScaffold(
+            profile = sessionState.data,
+            showDebugActions = showDebugActions,
             modifier = modifier,
         )
+
+        is UiState.Error -> Box(
+            modifier = modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+            contentAlignment = Alignment.Center,
+        ) {
+            ErrorState(
+                error = sessionState.error,
+                onRetry = onRetrySession,
+            )
+        }
     }
 }
 
@@ -71,6 +88,7 @@ private enum class MainTab(
 @Composable
 private fun MainScaffold(
     profile: UserProfile,
+    showDebugActions: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val navController = rememberNavController()
@@ -126,7 +144,10 @@ private fun MainScaffold(
                 GoalsScreen()
             }
             composable(MainTab.Settings.route) {
-                SettingsScreen(displayName = profile.displayName)
+                SettingsScreen(
+                    displayName = profile.displayName,
+                    showDebugActions = showDebugActions,
+                )
             }
         }
     }

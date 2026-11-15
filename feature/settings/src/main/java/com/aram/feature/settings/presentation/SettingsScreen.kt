@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -19,6 +20,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun SettingsScreen(
     displayName: String,
+    showDebugActions: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -60,7 +62,7 @@ fun SettingsScreen(
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "Your data stays on this device.",
+                    text = "Your data is private to your account.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
                 )
@@ -76,6 +78,21 @@ fun SettingsScreen(
         )
 
         Spacer(Modifier.height(28.dp))
+
+        if (showDebugActions) {
+            Text(
+                text = "Developer",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = { throw IllegalStateException("Debug crash from Settings") },
+            ) {
+                Text("Simulate crash")
+            }
+            Spacer(Modifier.height(28.dp))
+        }
 
         Text(
             text = "Version $versionName",
