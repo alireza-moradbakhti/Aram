@@ -64,7 +64,7 @@ GH="C:/Program Files/GitHub CLI/gh.exe"
 
 | Sprint | Dates | Capacity | Phase |
 | --- | --- | --- | --- |
-| S1 | Nov 16 – Nov 29, 2026 | 26 | Phase 1 |
+| S1 | Nov 16 – Nov 29, 2026 | 31 | Phase 1 |
 | S2 | Nov 30 – Dec 13, 2026 | 23 | Phases 1–2 |
 | S3 | Dec 14 – Dec 27, 2026 | 21 | Phases 2–3 |
 | S4 | Dec 28 – Jan 10, 2027 | 22 | Phase 3 |
@@ -72,6 +72,10 @@ GH="C:/Program Files/GitHub CLI/gh.exe"
 
 If the sum for the current sprint exceeds capacity, move the lowest-priority
 item to the next iteration — do not stretch the sprint.
+
+S1 was planned at 26 points and then gained **AR-037** (safe error handling,
+5 pts) as its first task, so 31 is the revised commitment. If velocity lags,
+AR-008 (2 pts) is the first to move to S2.
 
 ### Optional: burn-up chart
 
@@ -84,6 +88,7 @@ this sprint" without a spreadsheet.
 **Planning (Monday, ~30 min)**
 1. Open **Backlog**, filter `sprint:@next` (or empty).
 2. Fill the next iteration: top `P0` first, then `P1`, until points ≈ capacity.
+   Sprint 1 starts with **AR-037** (safety baseline) — pull it first, before any feature work.
 3. Set `Sprint` on each card (drag into the iteration group).
 4. Confirm every item has points, priority, and no blocked dependency
    (see the dependency column in MASTER_PLAN).
