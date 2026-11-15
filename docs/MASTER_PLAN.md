@@ -33,7 +33,8 @@ network.
 | Writes | Optimistic local write + `sync_outbox` row; a WorkManager worker pushes when online. Failed pushes retry with backoff; permanent 4xx errors mark the row `FAILED` and surface a retry action. |
 | Offline | Cached data stays readable, with an offline/stale banner and last-synced time. Writes are queued, not rejected. |
 | Conflict | Last-write-wins per row on `updated_at`; tombstones travel through sync. |
-| Auth | Email + password, JWT access (15 min) + rotating refresh token. Alpha mocks all auth and data routes; beta/prod use the real API. |
+| Auth | Email + password, JWT access (15 min) + rotating refresh token. Alpha mocks all auth and data routes by default; `beta` uses the stage API; `prodRelease` uses production. |
+| Environments | Every variant resolves the stage host except `prodRelease`, which resolves production. Both run the same contract; stage data is disposable. `ApiEnvironment` + `EndpointProvider` live in `:core:network`; hosts come from `gradle.properties`, never from Kotlin. |
 | Transport | `:core:network` with Ktor + kotlinx.serialization. `ARAM_API_MODE=mock\|remote` selects the engine in DI — features never branch on it. |
 | Contract | [API_CONTRACT.md](API_CONTRACT.md) is the source of truth for endpoints, envelopes, ids, money, and sync. |
 
@@ -192,6 +193,16 @@ built on Ktor — the same code can serve an iOS or desktop client later.
   core/designsystem commonMain — only if Compose Multiplatform is adopted
 :app                Android shell — activity, navigation, permissions, widgets, WorkManager
 ```
+
+**DI (decided 2026-11-16): Hilt stays.** Every Hilt annotation lives in
+Android-only modules (`:app`, `:core:data`, `:core:database`, `:core:datastore`,
+`:feature:*`). The KMP-target modules (`model`, `money`, `common`, `logging`,
+`domain`, `network`) expose plain constructors and interfaces and never import
+Hilt — that is the seam. When a second shell ships (K4), add Koin or a manual
+graph for the shared layer without editing a single shared file. Koin is not
+adopted now: it would trade Hilt's compile-time graph verification and
+first-party Compose/WorkManager integration for a benefit that only exists once
+an iOS client does.
 
 **Stages**
 
