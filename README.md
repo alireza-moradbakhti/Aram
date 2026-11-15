@@ -23,7 +23,8 @@
   <a href="#tech-stack">Stack</a> ·
   <a href="#getting-started">Get started</a> ·
   <a href="#roadmap">Roadmap</a> ·
-  <a href="docs/SPEC.md">Spec</a>
+  <a href="docs/SPEC.md">Spec</a> ·
+  <a href="docs/MASTER_PLAN.md">Plan</a>
 </p>
 
 ---
@@ -329,7 +330,11 @@ Workflows: [CI](.github/workflows/ci.yml) · [Release](.github/workflows/release
 | **Phase 3 · Budgets & goals** | Budget CRUD and alerts, goal contributions, streaks, projection, empty states | Planned |
 | **Phase 4 · Polish & release** | Recurring rules, WorkManager reminders, CSV export, biometric lock, widget, release signing | Planned |
 
-The step-by-step backlog, sprint iterations, and acceptance criteria live on the **[GitHub Project board](https://github.com/users/alireza-moradbakhti/projects/6)**. See [docs/ROADMAP.md](docs/ROADMAP.md) for how the work is sliced.
+The step-by-step backlog, sprint iterations, and acceptance criteria live on the **[GitHub Project board](https://github.com/users/alireza-moradbakhti/projects/6)**. Every task carries a stable `AR-0NN` key (`AR-001` … `AR-036` today) used in branches, commits, and comments.
+
+- [docs/MASTER_PLAN.md](docs/MASTER_PLAN.md) — every task with points, sprint, dependencies, the release checklist, and the post-MVP Kotlin Multiplatform migration plan.
+- [docs/GITHUB_SCRUM.md](docs/GITHUB_SCRUM.md) — how to read the backlog, the active sprint, story points and capacity, and how to run the sprint loop.
+- [docs/ROADMAP.md](docs/ROADMAP.md) — the sprint-by-sprint narrative.
 
 ## Contributing
 
