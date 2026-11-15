@@ -45,6 +45,7 @@ Requirements: JDK 21, Android SDK Platform 37, Android Studio latest stable.
 - Features must not depend on `:core:data` or `:core:database`; go through a `:core:domain` interface.
 - Never use `Double` or `Float` for money. Use `Money` / `Long` minor units.
 - No analytics, tracking, or network dependencies in the MVP.
+- Logging: inject `com.aram.core.logging.Logger`; `name` is the component and `message` states what happened. `sendToServer` defaults to `false` — flag only crash/summary events. Never log names, notes, balances, or account numbers.
 - Add a comment only when the *why* is non-obvious.
 
 ## Build and release conventions

@@ -105,6 +105,7 @@ Launch
   :model                 pure Kotlin domain models + enums (no Android)
   :money                 Money value type, CurrencyCode, formatting (pure Kotlin)
   :common                CoroutineDispatchers abstraction (pure Kotlin)
+  :logging               structured logger, platform-free (pure Kotlin)
   :database              Room: entities, DAOs, AramDatabase, DatabaseModule
   :datastore             DataStore Preferences: session storage
   :domain                repository interfaces (AuthRepository, ...)
@@ -149,6 +150,7 @@ com.aram
 **Dependency rules**
 - `:feature:*` → `:core:domain`, `:core:model`, `:core:money`, `:core:designsystem` — **never** `:core:data` or `:core:database`
 - `:core:domain` → `:core:model` only (pure Kotlin)
+- Any module may depend on `:core:logging`; it depends on nothing
 - `:core:data` → `:core:domain`, `:core:database`, `:core:datastore`, `:core:model`, `:core:money`
 - `:app` wires features together through lambdas; features never navigate into each other
 - Enforced by Gradle module graphs; `:core:model`/`:core:money`/`:core:common` are pure Kotlin so they could later be shared with a KMP backend client

@@ -158,6 +158,7 @@ flowchart TD
 | **Swappable auth seam** | Features depend on `AuthRepository`; a remote implementation can replace the local one without touching UI modules. See [AuthRepository.kt](core/domain/src/main/java/com/aram/core/domain/repository/AuthRepository.kt). |
 | **No INTERNET permission** | Offline privacy is a product guarantee, not an afterthought. Add it only when sync ships. |
 | **Defense in depth** | No `INTERNET`, backups disabled, R8 obfuscation, stripped release logs, and signing secrets kept outside git. |
+| **KMP-ready logging** | A pure-Kotlin `:core:logging` module with named events; `sendToServer` defaults to `false` and uploads stay disabled until a backend exists. |
 | **Custom Canvas charts** | Full control over the calm visual language; no heavyweight chart dependency. |
 | **Version catalog + CI** | One source of truth for versions, and every PR proves the build on a clean Ubuntu runner. |
 | **Staged builds + R8** | `alpha`/`beta`/`prod` flavors keep previews side-by-side with prod; minified releases shrink the APK from ~14 MB to ~1.5 MB, and mapping files are archived for crash triage. |

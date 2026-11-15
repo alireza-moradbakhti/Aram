@@ -11,8 +11,9 @@ This is how Aram gets from a skeleton to a real product. Work is sliced into fiv
 ## Sprint 1 — Transactions foundation
 **Nov 16 – Nov 29, 2026 · Milestone M1**
 
-Outcome: record income and expenses end-to-end, from a validated form to a grouped list and correct account balances.
+Outcome: nothing crashes or hangs on a failed load, and income/expenses are recorded end-to-end — from a validated form to a grouped list and correct account balances.
 
+- [ ] AR-037 Safe error handling across screens and layers (first task)
 - [ ] AR-001 Transaction domain contract and use cases
 - [ ] AR-002 Room-backed transaction repository
 - [ ] AR-003 Locale-aware money input component

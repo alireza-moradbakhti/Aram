@@ -8,7 +8,7 @@ status of every task lives on the
 
 ## Task codes
 
-Every issue has a stable key: `AR-001` … `AR-036`, assigned in delivery order and
+Every issue has a stable key: `AR-001` … `AR-037`, assigned in delivery order and
 never reused. The GitHub issue number stays as the URL/id, but all planning
 artifacts, branches, commits, and comments use the key.
 
@@ -16,14 +16,15 @@ artifacts, branches, commits, and comments use the key.
 - Commit: `feat(transactions): group list by month (AR-005)`
 - Board card title: `AR-005 · Transactions list with month headers and day groups`
 
-`AR-001 … AR-036` map 1:1 to issues `#2 … #37` in the same order.
+`AR-001 … AR-036` map 1:1 to issues `#2 … #37`; `AR-037` (issue `#38`) is the
+safety task added after sprint planning. New work starts at `AR-038`.
 
 ## Where we are
 
 | Phase | Scope | State |
 | --- | --- | --- |
 | Phase 0 · Skeleton | multi-module Gradle, theme, splash, welcome, nav shell, Room v1, local session, CI, variants, signing config | ✅ done |
-| Phase 1 · Transactions core | AR-001 … AR-011, AR-015 | next |
+| Phase 1 · Transactions core | AR-037 (safety baseline), AR-001 … AR-011, AR-015 | next |
 | Phase 2 · Dashboard & insight | AR-012 … AR-018 | planned |
 | Phase 3 · Budgets & goals | AR-019 … AR-029 | planned |
 | Phase 4 · Polish & release | AR-030 … AR-036 | planned |
@@ -31,7 +32,7 @@ artifacts, branches, commits, and comments use the key.
 
 ## Delivery model
 
-- **Sprints:** five two-week sprints (S1 Nov 16–29 2026 → S5 Jan 11–24 2027), capacity 26 / 23 / 21 / 22 / 24 points.
+- **Sprints:** five two-week sprints (S1 Nov 16–29 2026 → S5 Jan 11–24 2027), capacity 31 / 23 / 21 / 22 / 24 points. S1 gained the 5-point safety baseline (AR-037) on top of its original 26; if velocity suffers, AR-008 slips to S2 first.
 - **Estimation:** Fibonacci — XS 1, S 2, M 3, L 5, XL 8.
 - **Alpha gate:** every change ships as `alphaDebug`, built by CI, tested on a real device. Nothing else is built in CI.
 - **Release gate:** `beta`/`prod` builds are cut only from a green, device-tested `dev`, and only when a release is being prepared.
@@ -40,11 +41,12 @@ artifacts, branches, commits, and comments use the key.
 
 ## Phase 1 — Transactions core (S1–S2)
 
-Exit criteria: record income/expense end-to-end, see them correctly grouped, balances derived, transfers atomic.
+Exit criteria: record income/expense end-to-end, see them correctly grouped, balances derived, transfers atomic — and no screen can crash or hang on a failed load.
 
 | Key | Task | Pts | Priority | Sprint | Depends on |
 | --- | --- | --- | --- | --- | --- |
-| AR-001 | Transaction domain contract and use cases | 3 | P0 | S1 | — |
+| AR-037 | Safe error handling across screens and layers | 5 | P0 | S1 (first) | — |
+| AR-001 | Transaction domain contract and use cases | 3 | P0 | S1 | AR-037 |
 | AR-002 | Room-backed transaction repository | 3 | P0 | S1 | AR-001 |
 | AR-003 | Locale-aware money input component | 2 | P1 | S1 | — |
 | AR-004 | Add-transaction screen | 5 | P0 | S1 | AR-002, AR-003 |
@@ -134,7 +136,7 @@ desktop client later, and makes the sync client reusable — without a rewrite.
 | Stage | Work | Exit criteria |
 | --- | --- | --- |
 | K0 · Portability guardrails | Ban `java.*`/Android types in shared modules; inject `Clock`; prefer `kotlinx-datetime`; keep formatting behind an interface | New code in `core/model`, `core/money`, `core/common`, `core/domain` compiles without Android imports |
-| K1 · Pure modules | Apply the KMP plugin; `androidTarget` + `jvm()` (add `iosArm64`/`iosSimulatorArm64` when a client exists); migrate tests to `kotlin.test` | `:core:model`, `:core:money`, `:core:common` build for all targets; unit tests green |
+| K1 · Pure modules | Apply the KMP plugin; `androidTarget` + `jvm()` (add `iosArm64`/`iosSimulatorArm64` when a client exists); migrate tests to `kotlin.test`. `:core:logging` is already platform-free and moves here | `:core:model`, `:core:money`, `:core:common`, `:core:logging` build for all targets; unit tests green |
 | K2 · Domain & data | Add `:core:domain` to KMP; choose Room KMP (reuses schema, DAOs) over SQLDelight; DataStore via its KMP artifact or `multiplatform-settings`; platform driver/`expect` builders | Repository + DAO tests pass on JVM and Android; no Android types in `commonMain` |
 | K3 · Presentation | ViewModels in `commonMain` with `kotlinx-coroutines`; UI stays Jetpack Compose unless iOS becomes a target | Screens stay stateless; Android app behavior unchanged |
 | K4 · Second shell (optional) | Compose Multiplatform UI or a native SwiftUI shell over `:shared`; expect/actual for Keychain vs Keystore | App boots on a second platform with the same domain tests |
