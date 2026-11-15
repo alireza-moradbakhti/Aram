@@ -277,8 +277,9 @@ Then `./gradlew :app:assembleProdRelease` produces a properly signed APK. Withou
 
 - **`dev`** — integration branch and the source for every release build.
 - **`main`** — stable branch; mirrors the latest tagged release.
-- **Feature branches** — cut from `dev` as `feat/<issue>-<slug>`, `fix/…`, or `chore/…`; merged back into `dev` only after the CI build and a real-device pass.
-- **Releases** — tag `v*` from `dev`; the release workflow builds `prodRelease`, and `main` is fast-forwarded to the tagged commit.
+- **Feature branches** — cut from `dev` as `feat/AR-005-<slug>`, `fix/…`, or `chore/…`; merged back into `dev` only after the CI build and a real-device pass, through a PR.
+- **Pull requests** — titled `type(area): summary (AR-0NN)`, base `dev`. Merged head branches are deleted automatically; `dev` and `main` are never deleted.
+- **Releases** — tag `v*` from `dev`; the release workflow builds `prodRelease`, and `main` is fast-forwarded to the tagged commit. A `dev` → `main` PR is a release action, never an automatic merge.
 
 ```bash
 git checkout dev && git pull --ff-only origin dev

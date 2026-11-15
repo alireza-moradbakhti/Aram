@@ -130,11 +130,44 @@ this sprint" without a spreadsheet.
 5. Hands you a numbered device-test script for the alpha APK.
 6. After your report: rebuilds, posts the **Shipped** comment (branch, commit,
    points, verification, follow-ups), commits, pushes, sets **Done**.
+7. Opens a PR into `dev` with a proper title and body, waits for CI, squash
+   merges, deletes the feature branch, and syncs local `dev`.
 
 Never set Done manually before the device pass; the comment is the audit trail
 used for sprint stats and the portfolio case study.
 
-## 6. CLI cheat sheet
+## 6. Pull requests, merging, and branch cleanup
+
+**Every change reaches `dev` through a PR.** Feature branches are short-lived;
+`dev` and `main` are permanent.
+
+| Rule | Detail |
+| --- | --- |
+| Base branch | `dev` for features, fixes, chores, docs. `main` only receives `dev`. |
+| Title | `type(area): summary (AR-0NN)` — e.g. `feat(transactions): group list by month (AR-005)` |
+| Body | Fill `.github/PULL_REQUEST_TEMPLATE.md`: summary, task key + points, verification (CI + device), checklist |
+| Merge | Squash merge, only with green CI and a device pass |
+| Cleanup | The head branch is deleted after merge. `dev` and `main` are **never** deleted. |
+| Release | `dev` → `main` is a release action, not a feature PR; never auto-merged |
+
+Automation in the repo:
+
+- `.github/workflows/cleanup-branches.yml` deletes a head branch when a PR is
+  merged **into `dev`**, and only if the head is neither `dev` nor `main` and
+  lives in this repository (fork branches are left alone).
+- Repository auto-delete is deliberately **off**: enabling it would delete
+  `dev` when the `dev` → `main` release PR merges.
+- Dependabot PRs also target `dev` (`target-branch: "dev"`).
+
+After merging from the CLI:
+
+```bash
+git checkout dev && git pull --ff-only origin dev
+```
+
+If a branch is not merged, leave it alone — cleanup is for merged work only.
+
+## 7. CLI cheat sheet
 
 ```bash
 GH="C:/Program Files/GitHub CLI/gh.exe"   # or just gh if on PATH
@@ -168,7 +201,7 @@ Gotchas:
 - In `item-list --format json`, story points are under `"story Points"` (with the
   space), not `storyPoints`.
 
-## 7. Labels
+## 8. Labels
 
 | Label | Meaning |
 | --- | --- |
@@ -176,7 +209,7 @@ Gotchas:
 | `priority:p0` `priority:p1` `priority:p2` | p0 = blocks the phase, p1 = planned, p2 = nice to have |
 | `phase:1` … `phase:4` | Phase of the roadmap |
 
-## 8. Rules that keep the board honest
+## 9. Rules that keep the board honest
 
 1. Every branch maps to exactly one `AR-0NN`.
 2. Every commit references the key; every PR says `Closes #<issue>`.

@@ -57,6 +57,14 @@ Requirements: JDK 21, Android SDK Platform 37, Android Studio latest stable.
 - Keep the R8 mapping file (`app/build/outputs/mapping/prodRelease/mapping.txt`) with the release it belongs to; the release workflow archives it as an artifact.
 - APKs are named `aram-<stage>-<buildType>-<versionCode>-<yyyyMMdd>.apk`; do not rename build outputs by hand.
 
+## Pull requests
+
+- Base branch is `dev`. Only `dev` merges into `main`, and that is a release action.
+- Title: `type(area): summary (AR-0NN)` — for example `feat(transactions): group list by month (AR-005)`.
+- Fill [the PR template](.github/PULL_REQUEST_TEMPLATE.md): summary, task key and points, CI command, device results, checklist.
+- Squash merge only with green CI and a reported device pass. The head branch is deleted automatically after the merge; `dev` and `main` are never deleted.
+- After merging: `git checkout dev && git pull --ff-only origin dev`.
+
 ## Definition of done
 
 - [ ] Acceptance criteria in the linked issue are met
