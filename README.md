@@ -32,7 +32,7 @@ Aram is a save-first personal finance app for people who abandon budgeting apps.
 
 It is built as a real, production-shaped Android project: multi-module Clean Architecture, MVVM with unidirectional state, an offline Room database designed for a future sync layer, and a CI/CD pipeline that builds, tests, and ships preview APKs from Git tags.
 
-> **Status:** early development. The skeleton (M0) is complete: design system, navigation shell, onboarding, local session, Room schema v1, and CI/CD. Feature work is tracked publicly on the [project board](https://github.com/alireza-moradbakhti/Aram/projects).
+> **Status:** early development. The skeleton (M0) is complete: design system, navigation shell, onboarding, local session, Room schema v1, and CI/CD. Feature work is tracked publicly on the [project board](https://github.com/users/alireza-moradbakhti/projects/6).
 
 ## Design preview
 
@@ -156,6 +156,7 @@ flowchart TD
 | **Soft deletes (`deletedAt`)** | Tombstones survive until a future sync layer reconciles them. |
 | **Swappable auth seam** | Features depend on `AuthRepository`; a remote implementation can replace the local one without touching UI modules. See [AuthRepository.kt](core/domain/src/main/java/com/aram/core/domain/repository/AuthRepository.kt). |
 | **No INTERNET permission** | Offline privacy is a product guarantee, not an afterthought. Add it only when sync ships. |
+| **Defense in depth** | No `INTERNET`, backups disabled, R8 obfuscation, stripped release logs, and signing secrets kept outside git. |
 | **Custom Canvas charts** | Full control over the calm visual language; no heavyweight chart dependency. |
 | **Version catalog + CI** | One source of truth for versions, and every PR proves the build on a clean Ubuntu runner. |
 | **Staged builds + R8** | `alpha`/`beta`/`prod` flavors keep previews side-by-side with prod; minified releases shrink the APK from ~14 MB to ~1.5 MB, and mapping files are archived for crash triage. |
@@ -249,6 +250,40 @@ The app uses one flavor dimension (`stage`) and two build types (`debug`, `relea
 - Release signing reads `ARAM_KEYSTORE_PATH`, `ARAM_KEYSTORE_PASSWORD`, `ARAM_KEY_ALIAS`, and `ARAM_KEY_PASSWORD` from the environment or the gitignored `.env` file. Without a keystore it falls back to the debug key and logs a warning, which keeps preview releases buildable on any machine.
 - `alpha` and `beta` carry an application-id suffix, so they can be installed next to each other and next to prod.
 
+### Signing a release
+
+Release builds are signed with your own keystore; the keystore and its passwords never enter the repository.
+
+```bash
+keytool -genkeypair -v -keystore aram-release.jks -alias aram \
+  -keyalg RSA -keysize 4096 -validity 10000
+```
+
+Copy [`.env.example`](.env.example) to `.env` (gitignored) and fill in:
+
+```bash
+ARAM_KEYSTORE_PATH=C:/keys/aram-release.jks
+ARAM_KEYSTORE_PASSWORD=…
+ARAM_KEY_ALIAS=aram
+ARAM_KEY_PASSWORD=…
+```
+
+Then `./gradlew :app:assembleProdRelease` produces a properly signed APK. Without these values the build falls back to the debug key — fine for previews, never for distribution. Back up the keystore and passwords separately: losing them means you can never update the app under the same application id.
+
+### Branching model
+
+- **`dev`** — integration branch and the source for every release build.
+- **`main`** — stable branch; mirrors the latest tagged release.
+- **Feature branches** — cut from `dev` as `feat/<issue>-<slug>`, `fix/…`, or `chore/…`; merged back into `dev` only after the CI build and a real-device pass.
+- **Releases** — tag `v*` from `dev`; the release workflow builds `prodRelease`, and `main` is fast-forwarded to the tagged commit.
+
+```bash
+git checkout dev && git pull --ff-only origin dev
+git checkout -b feat/12-search-and-filter
+# …work, build, test on a device…
+git push -u origin feat/12-search-and-filter
+```
+
 ## Testing
 
 The project follows one rule: **business math is pure Kotlin and fast to test.**
@@ -266,7 +301,7 @@ The project follows one rule: **business math is pure Kotlin and fast to test.**
 
 ## CI/CD
 
-Every push and pull request to `main` runs on a clean Ubuntu runner:
+Every push and pull request to `main` or `dev` runs on a clean Ubuntu runner:
 
 1. Checkout, JDK 21, Android SDK 37
 2. `./gradlew :app:assembleAlphaDebug :app:assembleProdRelease test`
@@ -285,13 +320,13 @@ Workflows: [CI](.github/workflows/ci.yml) · [Release](.github/workflows/release
 
 | Milestone | Scope | Status |
 |---|---|---|
-| **M0 · Skeleton** | Multi-module Gradle, theme, splash, welcome, navigation shell, Room v1, local session, CI/CD | ✅ Complete |
-| **M1 · Transactions** | Add/edit/delete, list with month headers, account balances, transfers, search & filters, tests | 🔜 Next |
-| **M2 · Dashboard** | Safe-to-spend + explainer, month in/out, category donut, 6-month trend, recent transactions | Planned |
-| **M3 · Budgets & goals** | Budget CRUD and alerts, goal contributions, streaks, projection, empty states | Planned |
-| **M4 · Product polish** | Recurring rules, WorkManager reminders, CSV export, biometric lock, widget, release signing | Planned |
+| **Phase 0 · Skeleton** | Multi-module Gradle, theme, splash, welcome, navigation shell, Room v1, local session, CI/CD | ✅ Complete |
+| **Phase 1 · Transactions core** | Add/edit/delete, list with month headers, account balances, transfers, search & filters, tests | 🔜 Next |
+| **Phase 2 · Dashboard & insight** | Safe-to-spend + explainer, month in/out, category donut, 6-month trend, recent transactions | Planned |
+| **Phase 3 · Budgets & goals** | Budget CRUD and alerts, goal contributions, streaks, projection, empty states | Planned |
+| **Phase 4 · Polish & release** | Recurring rules, WorkManager reminders, CSV export, biometric lock, widget, release signing | Planned |
 
-The step-by-step backlog, sprint iterations, and acceptance criteria live on the **[GitHub Project board](https://github.com/alireza-moradbakhti/Aram/projects)**. See [docs/ROADMAP.md](docs/ROADMAP.md) for how the work is sliced.
+The step-by-step backlog, sprint iterations, and acceptance criteria live on the **[GitHub Project board](https://github.com/users/alireza-moradbakhti/projects/6)**. See [docs/ROADMAP.md](docs/ROADMAP.md) for how the work is sliced.
 
 ## Contributing
 
@@ -299,9 +334,26 @@ This is primarily a portfolio and learning project, but feedback and issues are 
 
 ## Security & privacy
 
+**On-device data**
 - No data leaves the device; the MVP does not request `INTERNET`.
-- No analytics or tracking SDKs.
-- To report a vulnerability, see [SECURITY.md](SECURITY.md) — please do not open a public issue.
+- No analytics, crash-reporting, or tracking SDKs.
+- Android backup and device transfer are disabled (`android:allowBackup="false"`), so the finance database cannot be pulled through `adb backup`, cloud backup, or a transfer tool. CSV export is the deliberate, user-driven way out (Phase 4).
+
+**Release hardening**
+- `prodRelease` runs R8 with resource shrinking, so class and member names are obfuscated and unused code is removed.
+- Debug and verbose `Log` calls are stripped from release builds.
+- The R8 mapping file is archived privately with each release (CI artifact, 90 days) and never committed. Debug-signed preview APKs are clearly previews, not store builds.
+- Signing uses a private keystore; its path, passwords, and aliases come from environment variables or the gitignored `.env`.
+
+**Keys and secrets**
+- No signing key, password, token, or `.env` file is tracked. Only `.env.example` is committed.
+- Android Keystore (hardware-backed) is the plan for the biometric app lock and any future sync tokens (Phase 4); private keys will never sit in plain preferences.
+
+**What "public" means**
+- The repository is public by design: source, tests, CI, and the board are part of the portfolio. Nothing sensitive is published.
+- Obfuscation raises the cost of reverse engineering; it does not make a client app impenetrable. Never ship API keys or credentials inside an APK — the architecture keeps them out.
+
+To report a vulnerability, see [SECURITY.md](SECURITY.md) — please do not open a public issue.
 
 ## License
 
