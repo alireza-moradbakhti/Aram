@@ -163,6 +163,8 @@ flowchart TD
 | **Cache-first, outbox writes** | The UI observes Room, so reads never wait on the network. Writes land locally with an outbox entry and sync in the background — offline is a state, not a failure. |
 | **Defense in depth** | HTTPS-only release traffic, backups disabled, R8 obfuscation, stripped release logs, tokens in Keystore-backed storage, and signing secrets kept outside git. |
 | **KMP-ready logging** | A pure-Kotlin `:core:logging` module with named events; `sendToServer` defaults to `false` and remote upload stays opt-in and disabled by default. |
+| **Hilt on Android, DI-agnostic core** | Hilt gives compile-time graph verification in the Android modules; `model`, `money`, `common`, `logging`, `domain`, and `network` take plain constructors, so Koin or a manual graph can serve a future iOS shell without touching shared code. |
+| **One network gate** | Every call goes through `:core:network`'s `safeApiCall` → typed `ApiError` → `AppError`; auth refresh, idempotency keys, retry policy, and sanitized logging are Ktor plugins, not per-call code. |
 | **Custom Canvas charts** | Full control over the calm visual language; no heavyweight chart dependency. |
 | **Version catalog + CI** | One source of truth for versions, and every PR proves the build on a clean Ubuntu runner. |
 | **Staged builds + R8** | `alpha`/`beta`/`prod` flavors keep previews side-by-side with prod; minified releases shrink the APK from ~14 MB to ~1.5 MB, and mapping files are archived for crash triage. |
