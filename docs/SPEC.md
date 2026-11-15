@@ -1,9 +1,9 @@
 # Aram — Product & Architecture Spec
 
 > A save-first money companion for people who are tired of budgeting apps that feel like spreadsheets.
-> Offline-first. Single user today, sync-ready tomorrow.
+> Online account, offline cache, sync-ready writes.
 
-- **Status:** Skeleton scaffolded (splash, welcome, navigation shell, core data layer)
+- **Status:** Skeleton scaffolded; moving to the online data layer (network + mock API first)
 - **Platform:** Android (minSdk 26, compileSdk 37, targetSdk 36)
 - **Stack:** Kotlin 2.4.21 · AGP 9.5.1 (built-in Kotlin) · Jetpack Compose (Material 3) · Hilt · Room · DataStore · Navigation Compose
 
@@ -17,7 +17,7 @@ Most finance apps are built around *tracking* money. Aram is built around *keepi
 |---|---|
 | Enter data, see charts, feel guilty | Answer one question: **"Can I spend this?"** |
 | Dozens of settings before first value | Value in under 60 seconds of use |
-| Cloud account required | Fully offline; no account required, ever (until sync is added on your terms) |
+| Cloud account required | Sign in once; cached data still opens offline, and writes queue until you reconnect |
 | Grey dashboards and dense tables | One number, one chart, one next action |
 
 **Target user:** Gen Z / younger millennials (18–32) who want to save toward concrete things — a trip, an emergency fund, moving out — and who abandon traditional budgeting apps within two weeks.
@@ -26,14 +26,17 @@ Most finance apps are built around *tracking* money. Aram is built around *keepi
 1. **Safe-to-spend number** — the hero of the home screen. Income minus committed spending (bills, recurring charges, budgets) divided across remaining days.
 2. **Goal streaks** — saving becomes a habit loop, not a database.
 3. **Calm visual language** — one accent chart at a time, generous spacing, no red-alarm dashboards.
-4. **Privacy by default** — data never leaves the device. No analytics SDK in the MVP.
+4. **Private by default** — data syncs to the user's own account over TLS; no
+   analytics SDK, no third-party trackers.
 
 ---
 
 ## 2. Feature scope
 
 ### P0 — MVP (build first)
-- Local profile (single user), default currency, Gregorian/Jalali calendar choice
+- Online account (email + password) with a swappable mock API for alpha builds
+- Cached reads offline, pull-to-refresh on reconnect, queued writes via an outbox
+- Default currency, Gregorian/Jalali calendar choice
 - Accounts (cash / bank / wallet / savings / investment) with opening balances
 - Income & expense transactions with categories, notes, dates
 - Transfers between accounts (one logical transfer, two ledger rows)
@@ -46,14 +49,13 @@ Most finance apps are built around *tracking* money. Aram is built around *keepi
 
 ### P1 — Post-MVP
 - Recurring rules (daily/weekly/monthly/yearly) and subscription detection heuristics
-- Biometric app lock
 - CSV export; CSV import for bank statements
-- Home-screen widget (safe-to-spend)
 - Reminders via WorkManager (log daily spend, monthly review)
 - Insight cards ("You spent 23% less on food than last month")
 
-### P2 — Product-grade / backend era
-- Remote accounts + real-time sync (see §8)
+### P2 — Backlog
+- Biometric app lock
+- Home-screen widget (safe-to-spend)
 - Shared budgets / households
 - Multi-currency conversion with rate snapshots
 - Bank aggregator integration (region dependent)
@@ -71,12 +73,12 @@ Most finance apps are built around *tracking* money. Aram is built around *keepi
 ```
 Launch
   └─ Splash (system splash, green field + wallet mark, held while session loads)
-       ├─ No profile ─→ Welcome
-       │                  └─ enter name → create profile (+ default categories, Cash account)
-       └─ Profile exists ─→ Main shell (bottom nav: Home · Transactions · Budgets · Goals · Settings)
+       ├─ No session ─→ Welcome (sign in / register)
+       │                  └─ success → load cached profile → sync in background
+       └─ Session exists ─→ Main shell (bottom nav: Home · Transactions · Budgets · Goals · Settings)
 ```
 
-**Welcome page** — one gradient headline ("Aram"), one tagline (*Save smarter. Spend calmer.*), one text field (name), one button. Privacy note: "Your data stays on this device."
+**Welcome page** — one gradient headline ("Aram"), one tagline (*Save smarter. Spend calmer.*), email + password, a register toggle, and (alpha only) a demo-account shortcut. Privacy note: "Synced to your account; readable offline."
 
 **Home (dashboard)**
 1. Greeting + avatar chip
@@ -106,10 +108,11 @@ Launch
   :money                 Money value type, CurrencyCode, formatting (pure Kotlin)
   :common                CoroutineDispatchers abstraction (pure Kotlin)
   :logging               structured logger, platform-free (pure Kotlin)
+  :network               Ktor client, DTOs, auth interceptor, sync API, MockEngine
   :database              Room: entities, DAOs, AramDatabase, DatabaseModule
-  :datastore             DataStore Preferences: session storage
+  :datastore             DataStore Preferences: session, token metadata, last sync
   :domain                repository interfaces (AuthRepository, ...)
-  :data                  repository implementations, mappers, seed data, DI
+  :data                  repository implementations, mappers, outbox, seed data, DI
   :designsystem          AramTheme, color schemes, typography, reusable components
 :feature
   :onboarding            Welcome screen + ViewModel
@@ -132,12 +135,15 @@ com.aram
 │   ├── model/           domain models (pure Kotlin)
 │   ├── money/           Money · CurrencyCode (pure Kotlin)
 │   ├── common/          CoroutineDispatchers (pure Kotlin)
+│   ├── logging/         Logger, sinks (pure Kotlin)
+│   ├── network/         AramApi, Ktor engine, DTOs, error mapping, MockEngine
 │   ├── domain/repository/   AuthRepository — interfaces only
 │   ├── data/
-│   │   ├── repository/  AuthRepositoryImpl
-│   │   ├── mapper/      entity → model mappers
+│   │   ├── repository/  cache-first repository implementations
+│   │   ├── mapper/      DTO/entity → model mappers
+│   │   ├── sync/        outbox, sync coordinator, WorkManager worker
 │   │   ├── defaults/    seed categories + Cash account
-│   │   └── di/          Hilt modules
+│   │   └── di/          Hilt modules (mock vs remote binding)
 │   ├── database/
 │   │   ├── entity/ · dao/
 │   │   ├── AramDatabase
@@ -148,12 +154,13 @@ com.aram
 ```
 
 **Dependency rules**
-- `:feature:*` → `:core:domain`, `:core:model`, `:core:money`, `:core:designsystem` — **never** `:core:data` or `:core:database`
+- `:feature:*` → `:core:domain`, `:core:model`, `:core:money`, `:core:designsystem` — **never** `:core:data`, `:core:database`, or `:core:network`
 - `:core:domain` → `:core:model` only (pure Kotlin)
 - Any module may depend on `:core:logging`; it depends on nothing
-- `:core:data` → `:core:domain`, `:core:database`, `:core:datastore`, `:core:model`, `:core:money`
+- `:core:network` → `:core:model`, `:core:logging`; implements [API_CONTRACT.md](API_CONTRACT.md) and hides the mock/remote choice behind DI
+- `:core:data` → `:core:domain`, `:core:database`, `:core:datastore`, `:core:network`, `:core:model`, `:core:money`
 - `:app` wires features together through lambdas; features never navigate into each other
-- Enforced by Gradle module graphs; `:core:model`/`:core:money`/`:core:common` are pure Kotlin so they could later be shared with a KMP backend client
+- Enforced by Gradle module graphs; `:core:model`/`:core:money`/`:core:common`/`:core:network` are Kotlin-first so they can later be shared with a KMP client
 
 **Packaging & MVVM conventions**
 - One package per responsibility: `presentation`, `repository`, `mapper`, `defaults`, `di`, `entity`, `dao`.
@@ -179,12 +186,13 @@ com.aram
 ## 6. Database schema (Room v1, `arya.db`)
 
 Every table carries sync + soft-delete columns:
-`userId` (owner), `createdAt`, `updatedAt` (epoch millis), `deletedAt` (nullable). Rows are soft-deleted; queries filter `deletedAt IS NULL`. This lets a future backend resolve changes without tombstones being lost.
+`userId` (owner), `createdAt`, `updatedAt` (epoch millis), `deletedAt` (nullable). Rows are soft-deleted; queries filter `deletedAt IS NULL`. The backend resolves changes from these columns and the tombstones — Room holds the device-side cache, not the only copy.
 
 ### `users`
 | column | type | notes |
 |---|---|---|
 | id | TEXT PK | UUID |
+| email | TEXT? | cached from the account; null for local-only legacy rows |
 | displayName | TEXT | |
 | defaultCurrency | TEXT | ISO code |
 | calendarSystem | TEXT | `GREGORIAN` \| `JALALI` |
@@ -294,38 +302,87 @@ Every table carries sync + soft-delete columns:
 
 ## 7. Auth & identity
 
-### Today — local profile ("single-user, no account")
-- `SessionDataStore` stores `user_id` in Preferences DataStore.
-- On welcome, `AuthRepository.createLocalProfile(name)`:
-  1. creates a `users` row (UUID),
-  2. seeds 12 default categories + a "Cash" account,
-  3. writes `user_id` to DataStore.
-- `MainViewModel` observes `AuthRepository.observeSession()` and maps to `Loading → LoggedOut → Ready(profile)`. Splash is held only during `Loading`.
-- No passwords, no network, nothing to sync yet. "Sign out" (P1) just clears the session id.
+### Alpha — mocked API, real seam
+- `AuthRepository` grows `register`, `signIn`, `signOut`, and a session flow; the
+  screen talks only to the interface.
+- Alpha builds serve `/auth/*` from a Ktor `MockEngine` (demo account, rotated
+  fake tokens, realistic latency). Switching to the real backend is a DI binding,
+  not a UI change.
+- Session states stay `Loading → LoggedOut → Ready(UserProfile)`. Splash is held
+  only during `Loading`.
+- On `401`, the client refreshes once and retries; a failed refresh signs the
+  user out and keeps cached data readable until the next sign-in.
+- Sign-out revokes the refresh token, clears tokens, and clears the user-scoped
+  cache (single account per device). Pending outbox writes must be flushed or
+  explicitly discarded before sign-out.
+- Existing local profiles migrate on first sign-in: rows keep their client UUIDs
+  and are pushed through the outbox, then the server user id becomes the session.
 
-### Tomorrow — backend auth without touching features
-Features depend only on `:core:domain`'s interface:
+### Tokens
+- Access JWT (15 min) + rotating refresh token (30 days), per
+  [API_CONTRACT.md](API_CONTRACT.md).
+- Tokens live behind a `TokenStore` interface. Alpha may keep them in memory;
+  beta/prod use Keystore-backed encrypted storage — never plain DataStore, never
+  logs, never crash reports.
+- Passwords are never stored. Argon2id hashing is server-side.
 
-```kotlin
-interface AuthRepository {
-    fun observeSession(): Flow<UserProfile?>
-    suspend fun createLocalProfile(displayName: String): UserProfile
-    // later: suspend fun signInWithEmail(...), suspend fun signInWithGoogle(...), fun signOut()
-}
-```
-
-The swap is a DI binding in `:core:data`: replace `AuthRepositoryImpl` with a remote-aware implementation that keeps the same session id in DataStore and mirrors the profile into Room. No feature module changes. A migration path for existing local users: on first remote sign-in, upload the local `userId`'s rows, then adopt the server user id (or keep client ids as UUIDs so there is no rewrite).
+### Welcome flow
+Email + password with a register toggle; a "Use demo account" shortcut exists in
+alpha only. The old name-only local profile becomes the post-sign-in display
+name. Privacy copy changes from "stays on this device" to "synced to your
+account; readable offline."
 
 ---
 
-## 8. Future sync design (planned, not built)
+## 8. Online data flow, cache, and sync
 
-- **Identity:** every row already has `userId` + UUID primary keys (client-generated → safe to push before server ack).
-- **Outbox:** new `sync_outbox` table records local mutations (`entity`, `entityId`, `op`, `payload`, `attempts`). A WorkManager worker flushes it.
-- **Timestamps:** client `updatedAt` for ordering; server assigns `serverUpdatedAt` on accept. Conflict policy: last-write-wins per row, with tombstones from `deletedAt`.
-- **DTOs:** snake_case JSON, mapped in `:core:data`; DTOs live in a future `:core:network` module, keeping Room entities private to `:core:database`.
-- **Realtime:** start with polling/pull-on-open; add WebSocket/SSE later via a `RemoteDataSource` abstraction.
-- **Security:** the backend must verify `userId` ownership server-side; client-supplied ids are opaque UUIDs. Tokens in `EncryptedSharedPreferences`, not DataStore preferences.
+```text
+UI → ViewModel → Repository (:core:domain)
+                    ├── Room cache  ← observed by the UI
+                    └── AramApi (:core:network) ── pull ──→ backend
+Outbox worker (:core:data) → sync_outbox → /sync/push → backend
+```
+
+**Reads (cache-first)**
+- The UI observes Room only; it never waits on the network to render.
+- Opening a screen, or pull-to-refresh, triggers a sync when the last successful
+  pull is older than 15 minutes (or always, for pull-to-refresh).
+- A refresh upserts rows into Room, so the same Flow updates the screen.
+- Pull failures never blank the cache: they surface `Offline`/`Stale` states with
+  the last-synced timestamp and a retry action.
+
+**Writes (outbox)**
+- A create/update/delete writes the row and an outbox entry in one Room
+  transaction. Transfers write both ledger rows and one outbox entry containing
+  both mutations, keeping the transfer atomic on the server.
+- Rows created locally carry a pending marker; the UI shows a subtle "pending
+  sync" chip rather than blocking the action.
+- The WorkManager worker flushes FIFO with exponential backoff (30 s → 1 h),
+  reusing the original `Idempotency-Key` on retries.
+- `409 conflict` replaces the local row with the canonical row and clears the
+  outbox entry. Permanent `4xx` marks the entry `FAILED` and surfaces
+  "couldn't sync — retry or discard"; it never retries forever.
+- New app versions must not drop outbox entries; the schema is append-only.
+
+**Pull merge**
+- Pull with `/sync?since=last_since`, apply rows and tombstones, and persist
+  `last_since` only after a complete page set.
+- Last-write-wins per row on `updated_at`; tombstones (`deleted_at`) are kept so
+  deletes propagate to other devices.
+- Outbox wins over a pull for rows with unflushed local changes until the push
+  resolves; a conflict response is the tie-breaker.
+
+**Offline UX**
+- Offline reads: cached content + offline banner + last-synced time.
+- Offline writes: accepted and queued, with a "will sync when online" message.
+- Reconnect: worker flushes, then a pull refreshes screens; no manual step.
+- Airplane mode is part of every feature's device script.
+
+**Room schema additions**
+- `sync_outbox` (`id`, `entity`, `entity_id`, `op`, `payload`, `attempts`,
+  `next_attempt_at`, `last_error`, `created_at`).
+- Rows gain no server-only fields; `updated_at` stays authoritative for ordering.
+  A migration ships with the first schema change (AR-036 covers migration tests).
 
 ---
 
@@ -333,11 +390,13 @@ The swap is a DI binding in `:core:data`: replace `AuthRepositoryImpl` with a re
 
 | Layer | Tool | What |
 |---|---|---|
-| Pure Kotlin | JUnit 4 | `Money` arithmetic/formatting (done), future date/period calculators, safe-to-spend logic |
-| Repositories | JUnit + Turbine + fakes | `AuthRepositoryImpl` session flow, seeding, validation |
+| Pure Kotlin | JUnit 4 | `Money` arithmetic/formatting (done), date/period calculators, safe-to-spend logic |
+| Network | Ktor `MockEngine` + contract fixtures | DTO shapes against [API_CONTRACT.md](API_CONTRACT.md), auth refresh, error mapping, timeouts |
+| Repositories | JUnit + Turbine + fakes | Cache-first reads, refresh upserts, offline fallback, outbox writes, conflict handling |
+| Outbox | coroutines-test + fake worker | FIFO ordering, idempotency reuse, backoff, permanent-failure state |
 | DAOs | Room `MigrationTestHelper` / in-memory DB (androidTest) | schema + query behavior, migrations from v1 onward |
-| ViewModels | coroutines-test | state transitions, validation errors |
-| UI | Compose UI tests | Welcome happy path + errors, nav shell |
+| ViewModels | coroutines-test | state transitions, validation errors, offline/pending states |
+| UI | Compose UI tests | Welcome sign-in/register, offline banner, pending chip |
 | Screenshots | Roborazzi/Paparazzi (P1) | theme regression |
 
 Rule: business math is pure Kotlin and lives in `:core:money` / `:core:domain` — no Android dependency, fast tests.
@@ -346,13 +405,17 @@ Rule: business math is pure Kotlin and lives in `:core:money` / `:core:domain` �
 
 ## 10. Milestones
 
-**M0 — Skeleton (this commit)**
+**M0 — Skeleton (done)**
 - [x] Multi-module Gradle setup, version catalog
 - [x] Splash + Welcome + main shell navigation
 - [x] Room schema v1 + DAOs, DataStore session, local auth repo
 - [x] Design system (teal/amber M3 theme, dark mode)
 
-**M1 — Transactions end-to-end (≈2 weeks)**
+**M1 — Online transactions end-to-end (≈4 weeks)**
+- [ ] Network module with mock API, real API later
+- [ ] Email/password sign-in and secure token session
+- [ ] Cache-first transactions with pull-to-refresh and offline reads
+- [ ] Outbox + sync worker for offline writes
 - [ ] Add/edit/delete transaction with account + category pickers and money input
 - [ ] Transactions list with month headers and search
 - [ ] Account balance calculations; transfer support
@@ -378,11 +441,19 @@ Rule: business math is pure Kotlin and lives in `:core:money` / `:core:domain` �
 
 ## 11. Privacy & security posture
 
-- No INTERNET permission in the MVP is a feature, not a limitation; add it only with sync.
-- Room file stays app-private; optional encryption via SQLCipher is P1 if users request it.
-- Biometric lock gates app entry using `BiometricPrompt` (auth **device** gate, not network auth).
+- The app requests `INTERNET` and talks only to the configured HTTPS API. No
+  other network calls, no ads, no analytics SDKs.
+- Room stays app-private; it is a cache of the user's server data. Sign-out
+  clears the user-scoped cache.
+- Tokens live in Keystore-backed storage; access tokens are short-lived and
+  refresh tokens rotate. Nothing sensitive is logged — no amounts, notes, emails,
+  tokens, or account numbers.
+- Cleartext HTTP is disabled in release builds; a debug-only network security
+  config may allow a local backend.
+- Server-side ownership checks are mandatory: a client-supplied `user_id` is
+  ignored in favor of the token subject.
 - CSV export writes through Storage Access Framework; no broad storage permissions.
-- No PII beyond a display name.
+- Biometric lock remains a device gate (post-MVP), separate from account auth.
 
 ---
 
@@ -392,3 +463,6 @@ Rule: business math is pure Kotlin and lives in `:core:money` / `:core:domain` �
 - **Safe to spend** — discretionary money per day after commitments.
 - **Streak** — consecutive weeks with a goal contribution.
 - **Tombstone** — soft-deleted row kept for sync reconciliation.
+- **Outbox** — local queue of mutations waiting to be pushed to the server.
+- **Cache-first** — read from Room immediately, refresh from the API in the background.
+- **Last-write-wins** — conflict rule: the row with the latest `updated_at` survives.

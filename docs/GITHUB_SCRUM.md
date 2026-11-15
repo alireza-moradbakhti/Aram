@@ -21,7 +21,8 @@ phase and one sprint.
 ## 2. Task codes (AR-0NN)
 
 - `AR-001` … `AR-036` map 1:1 to issues `#2` … `#37`, in delivery order.
-- Codes never change and are never reused. New work starts at `AR-037`.
+  `AR-037` is `#38`; the backend-era tasks `AR-038` … `AR-044` are `#41` … `#47`.
+- Codes never change and are never reused. New work starts at `AR-045`.
 - Use the code everywhere: branch (`feat/AR-005-…`), commit (`… (AR-005)`),
   comments, and the issue title (`AR-005 · Transactions list …`).
 - The full key → title → sprint table is in [MASTER_PLAN.md](MASTER_PLAN.md).
@@ -65,17 +66,35 @@ GH="C:/Program Files/GitHub CLI/gh.exe"
 | Sprint | Dates | Capacity | Phase |
 | --- | --- | --- | --- |
 | S1 | Nov 16 – Nov 29, 2026 | 31 | Phase 1 |
-| S2 | Nov 30 – Dec 13, 2026 | 23 | Phases 1–2 |
-| S3 | Dec 14 – Dec 27, 2026 | 21 | Phases 2–3 |
-| S4 | Dec 28 – Jan 10, 2027 | 22 | Phase 3 |
-| S5 | Jan 11 – Jan 24, 2027 | 24 | Phase 4 |
+| S2 | Nov 30 – Dec 13, 2026 | 29 | Phase 1 |
+| S3 | Dec 14 – Dec 27, 2026 | 21 | Phases 1–2 (holidays) |
+| S4 | Dec 28 – Jan 10, 2027 | 23 | Phases 1–2 |
+| S5 | Jan 11 – Jan 24, 2027 | 21 | Phase 3 |
+| S6 | Jan 25 – Feb 7, 2027 | 22 | Phases 3–4 |
 
 If the sum for the current sprint exceeds capacity, move the lowest-priority
 item to the next iteration — do not stretch the sprint.
 
-S1 was planned at 26 points and then gained **AR-037** (safe error handling,
-5 pts) as its first task, so 31 is the revised commitment. If velocity lags,
-AR-008 (2 pts) is the first to move to S2.
+Sprint 6 exists because the app became online: network, auth, cache, and the
+write outbox add ~26 net points. Biometric lock and the widget moved to the
+post-MVP backlog instead of stretching every sprint.
+
+### Online behavior in every device pass
+
+Alpha runs against the mock API (`ARAM_API_MODE=mock`); beta/prod run against the
+real backend. For any screen that reads or writes data, the device script must
+include:
+
+1. Airplane mode → cached data still renders, with an offline banner and
+   last-synced time.
+2. Airplane mode → add/edit a transaction → it is accepted, shows a pending
+   state, and survives an app restart.
+3. Reconnect → refresh (or wait for the worker) → the pending row syncs and the
+   banner clears.
+4. Backend unreachable or 5xx → typed error with retry; never a blank screen or
+   endless spinner.
+
+Real token values, emails, and amounts never appear in logs or screenshots.
 
 ### Optional: burn-up chart
 
@@ -88,7 +107,8 @@ this sprint" without a spreadsheet.
 **Planning (Monday, ~30 min)**
 1. Open **Backlog**, filter `sprint:@next` (or empty).
 2. Fill the next iteration: top `P0` first, then `P1`, until points ≈ capacity.
-   Sprint 1 starts with **AR-037** (safety baseline) — pull it first, before any feature work.
+   Sprint 1 starts with **AR-037** (safety baseline), then **AR-038** (network
+   foundation) — pull them first, before any feature work.
 3. Set `Sprint` on each card (drag into the iteration group).
 4. Confirm every item has points, priority, and no blocked dependency
    (see the dependency column in MASTER_PLAN).

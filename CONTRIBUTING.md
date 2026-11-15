@@ -71,6 +71,8 @@ Requirements: JDK 21, Android SDK Platform 37, Android Studio latest stable.
 - [ ] New business logic has unit tests
 - [ ] `./gradlew :app:assembleAlphaDebug test` passes
 - [ ] CI is green
+- [ ] For screens that read or write data: airplane mode shows cached content, offline writes queue, and reconnect syncs
+- [ ] API changes match [docs/API_CONTRACT.md](docs/API_CONTRACT.md); alpha still runs on the mock engine
 - [ ] README/spec updated if behavior or architecture changed
 
 ## Reporting bugs
