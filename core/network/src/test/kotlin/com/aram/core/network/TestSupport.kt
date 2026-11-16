@@ -14,7 +14,7 @@ import io.ktor.client.engine.mock.MockEngine
 import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
 import io.ktor.http.headersOf
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.CompletableDeferred
 
 internal val testConfig = ApiConfig(
     environment = ApiEnvironment.STAGE,
@@ -44,14 +44,14 @@ internal class FakeTokens(initial: String? = "token-1") : TokenProvider {
 
     var token: String? = initial
     var refreshCount = 0
-    var refreshDelayMs = 0L
+    var refreshWaitsFor: CompletableDeferred<Unit>? = null
     var refreshSucceeds = true
 
     override suspend fun accessToken(): String? = token
 
     override suspend fun refresh(): Boolean {
         refreshCount++
-        if (refreshDelayMs > 0) delay(refreshDelayMs)
+        refreshWaitsFor?.await()
         if (!refreshSucceeds) return false
         token = "token-${refreshCount + 1}"
         return true

@@ -5,6 +5,7 @@ import com.aram.core.network.X_APP_VERSION
 import com.aram.core.network.X_PLATFORM
 import io.ktor.client.plugins.api.Send
 import io.ktor.client.plugins.api.createClientPlugin
+import io.ktor.util.AttributeKey
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
@@ -41,13 +42,17 @@ val AramClientPlugin = createClientPlugin("AramClient", ::AramClientConfig) {
         if (request.method in WRITE_METHODS && !request.headers.contains(IDEMPOTENCY_KEY)) {
             request.headers.append(IDEMPOTENCY_KEY, UUID.randomUUID().toString())
         }
+        // Record the generation the attached token belongs to: a 401 after
+        // another request refreshed must retry, not refresh again.
+        val generation = auth.generation()
         tokens.accessToken()?.let { token ->
             request.headers.append(HttpHeaders.Authorization, "Bearer $token")
         }
+        request.attributes.put(AuthGenerationKey, generation)
     }
 
     on(Send) { request ->
-        val generation = auth.generation()
+        val generation = request.attributes.getOrNull(AuthGenerationKey) ?: auth.generation()
         var call = proceed(request)
 
         if (call.response.status == HttpStatusCode.Unauthorized &&
@@ -66,6 +71,8 @@ val AramClientPlugin = createClientPlugin("AramClient", ::AramClientConfig) {
 }
 
 private val WRITE_METHODS = setOf(HttpMethod.Post, HttpMethod.Patch, HttpMethod.Delete, HttpMethod.Put)
+
+private val AuthGenerationKey = AttributeKey<Long>("aram.auth.generation")
 
 /**
  * Serializes refreshes and hands out a generation counter: concurrent 401s that

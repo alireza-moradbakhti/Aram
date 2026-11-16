@@ -11,6 +11,7 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.test.runTest
@@ -19,6 +20,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicInteger
 
 class ClientPluginTest {
 
@@ -82,9 +84,14 @@ class ClientPluginTest {
 
     @Test
     fun `concurrent 401s trigger a single refresh`() = runTest {
-        val tokens = FakeTokens("token-1").apply { refreshDelayMs = 50 }
+        // The refresh blocks until both requests have received their 401, so
+        // both are provably in flight before the token changes.
+        val bothStale = CompletableDeferred<Unit>()
+        val tokens = FakeTokens("token-1").apply { refreshWaitsFor = bothStale }
+        val staleResponses = AtomicInteger()
         val engine = MockEngine { request ->
             if (request.headers[HttpHeaders.Authorization] == "Bearer token-1") {
+                if (staleResponses.incrementAndGet() == 2) bothStale.complete(Unit)
                 respond("", HttpStatusCode.Unauthorized)
             } else {
                 respond("", HttpStatusCode.NoContent)
@@ -100,6 +107,7 @@ class ClientPluginTest {
             assertTrue(second.await() is ApiResult.Success)
         }
 
+        assertEquals(2, staleResponses.get())
         assertEquals(1, tokens.refreshCount)
         assertEquals(4, engine.requestHistory.size)
     }

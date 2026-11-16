@@ -109,6 +109,15 @@ Existing: coroutines 1.11.0, JUnit 4.13.2.
   retry and the auth retry re-execute the same request deterministically.
 - **2026-11-16** — Timeout mapping is exercised through the real `HttpTimeout`
   plugin with `runTest` virtual time, not by throwing the exception by hand.
+- **2026-11-16** — The auth generation is recorded in `onRequest`, next to the
+  token it belongs to, not when `Send` starts. CI caught a race: a request
+  whose header was attached before another request's refresh could begin
+  sending after it and trigger a second refresh. The generation now travels
+  in a request attribute.
+- **2026-11-16** — The concurrent-401 test blocks `refresh()` on a
+  `CompletableDeferred` that completes when the second stale 401 arrives, so
+  both requests are provably in flight before the token changes; no virtual
+  delays and no timing assumptions.
 
 ## Verification log
 
@@ -157,6 +166,15 @@ Existing: coroutines 1.11.0, JUnit 4.13.2.
   Google-Maven attempt keeps the module pinned to `dl.google.com`, so the
   first build on this machine needs `--refresh-dependencies` once; plain
   builds are green afterwards.
+
+### 2026-11-16 — CI flake fix (PR #51)
+
+- First CI run failed: `ClientPluginTest > concurrent 401s trigger a single
+  refresh`. Root cause was a real race (generation captured at `Send`), not a
+  test-only issue; fixed by recording the generation in `onRequest` and moving
+  the test onto a deterministic barrier.
+- `:core:network:testDebugUnitTest --rerun-tasks` × 3 — BUILD SUCCESSFUL each
+  time.
 
 ### Device pass — passed
 
