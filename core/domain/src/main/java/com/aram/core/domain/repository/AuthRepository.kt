@@ -1,11 +1,16 @@
 package com.aram.core.domain.repository
 
+import com.aram.core.model.Outcome
 import com.aram.core.model.UserProfile
 import kotlinx.coroutines.flow.Flow
 
 interface AuthRepository {
 
-    fun observeSession(): Flow<UserProfile?>
+    /** Emits once for the current session, then again whenever it changes. */
+    fun observeSession(): Flow<Outcome<UserProfile?>>
 
-    suspend fun createLocalProfile(displayName: String): UserProfile
+    suspend fun createLocalProfile(displayName: String): Outcome<UserProfile>
+
+    /** Drops the session without touching the ledger, which stays on this device. */
+    suspend fun signOut(): Outcome<Unit>
 }
