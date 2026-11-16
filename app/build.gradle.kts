@@ -1,3 +1,4 @@
+import com.android.build.api.variant.BuildConfigField
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Properties
@@ -13,6 +14,10 @@ val appVersionName = providers.gradleProperty("aram.versionName").getOrElse("0.1
 val appVersionCode = providers.gradleProperty("aram.versionCode").getOrElse("1").toInt()
 val buildDate = providers.gradleProperty("buildDate")
     .getOrElse(LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE))
+
+// Contract hosts are build configuration, never Kotlin constants.
+val stageBaseUrl = providers.gradleProperty("aram.api.stageBaseUrl").get()
+val prodBaseUrl = providers.gradleProperty("aram.api.prodBaseUrl").get()
 
 // .env and local.properties are gitignored; environment variables take precedence.
 val localSecrets = Properties().apply {
@@ -128,6 +133,62 @@ androidComponents {
                 },
             )
         }
+
+        // --- API matrix (docs/API_CONTRACT.md) ---------------------------------
+        // alpha* -> stage + mock; beta* -> stage + remote; prodDebug -> stage +
+        // remote; prodRelease -> production + remote. Hosts live only in
+        // gradle.properties; debug builds may point ARAM_API_BASE_URL anywhere.
+        val isRelease = variant.buildType == "release"
+        val environment = if (stage == "prod" && isRelease) "PRODUCTION" else "STAGE"
+
+        val requestedMode = providers.environmentVariable("ARAM_API_MODE").orNull
+            ?: providers.gradleProperty("apiMode").orNull
+        val mode = (requestedMode ?: if (stage == "alpha") "mock" else "remote")
+            .uppercase()
+            .also { require(it == "MOCK" || it == "REMOTE") { "Unknown API mode '$it'; use mock or remote." } }
+
+        val isRequested = gradle.startParameter.taskNames.any {
+            it.lowercase().contains(variant.name.lowercase())
+        }
+        if (isRelease && isRequested) {
+            check(mode != "MOCK") {
+                "Release builds cannot use the mock API; pass -PapiMode=remote."
+            }
+        }
+
+        val hostOverride = providers.environmentVariable("ARAM_API_BASE_URL").orNull
+            ?.takeIf { variant.buildType == "debug" && it.isNotBlank() }
+        val baseUrl = hostOverride ?: if (environment == "PRODUCTION") prodBaseUrl else stageBaseUrl
+        val allowCleartext = hostOverride != null && baseUrl.startsWith("http://")
+
+        if (isRelease && isRequested) {
+            check(baseUrl.startsWith("https://")) {
+                "Release builds must use an HTTPS API host (got '$baseUrl')."
+            }
+            check(environment != "PRODUCTION" || baseUrl == prodBaseUrl) {
+                "prodRelease must use the production host from aram.api.prodBaseUrl."
+            }
+        }
+
+        val fields = requireNotNull(variant.buildConfigFields) {
+            "buildConfig must stay enabled for the API matrix."
+        }
+        fields.put(
+            "API_ENV",
+            BuildConfigField("String", "\"$environment\"", "API environment: STAGE | PRODUCTION"),
+        )
+        fields.put(
+            "API_MODE",
+            BuildConfigField("String", "\"$mode\"", "API mode: MOCK | REMOTE"),
+        )
+        fields.put(
+            "API_BASE_URL",
+            BuildConfigField("String", "\"$baseUrl\"", "Host from gradle.properties or a debug override"),
+        )
+        fields.put(
+            "API_ALLOW_CLEARTEXT",
+            BuildConfigField("boolean", allowCleartext.toString(), "Debug-only local-server escape hatch"),
+        )
     }
 }
 
@@ -144,6 +205,7 @@ dependencies {
     implementation(project(":core:domain"))
     implementation(project(":core:logging"))
     implementation(project(":core:model"))
+    implementation(project(":core:network"))
 
     implementation(project(":feature:onboarding"))
     implementation(project(":feature:dashboard"))
@@ -159,6 +221,10 @@ dependencies {
     implementation(libs.hilt.android)
     implementation(libs.androidx.hilt.navigation.compose)
     ksp(libs.hilt.compiler)
+
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.okhttp)
+    implementation(libs.ktor.client.mock)
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.bundles.compose)

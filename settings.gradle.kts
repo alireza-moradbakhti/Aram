@@ -9,6 +9,9 @@ pluginManagement {
         }
         mavenCentral()
         gradlePluginPortal()
+        // Myket proxy, last resort: google() is unreachable from some
+        // networks; the mirror serves the same artifacts unchanged.
+        maven { url = uri("https://maven.myket.ir/") }
     }
 }
 plugins {
@@ -19,6 +22,7 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        maven { url = uri("https://maven.myket.ir/") }
     }
 }
 
@@ -29,6 +33,7 @@ include(":core:model")
 include(":core:money")
 include(":core:common")
 include(":core:logging")
+include(":core:network")
 include(":core:database")
 include(":core:datastore")
 include(":core:domain")
