@@ -24,6 +24,7 @@ android {
 }
 
 dependencies {
+    api(project(":core:model"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.bundles.compose)
     debugImplementation(libs.androidx.compose.ui.tooling)

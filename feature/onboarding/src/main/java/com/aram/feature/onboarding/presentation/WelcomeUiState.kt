@@ -1,8 +1,9 @@
 package com.aram.feature.onboarding.presentation
 
+import com.aram.core.designsystem.state.SubmitState
+
 data class WelcomeUiState(
     val name: String = "",
-    val isSubmitting: Boolean = false,
+    val submitState: SubmitState = SubmitState.Idle,
     val showNameError: Boolean = false,
-    val showSaveError: Boolean = false,
 )

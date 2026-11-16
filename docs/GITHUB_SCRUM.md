@@ -21,7 +21,8 @@ phase and one sprint.
 ## 2. Task codes (AR-0NN)
 
 - `AR-001` … `AR-036` map 1:1 to issues `#2` … `#37`, in delivery order.
-- Codes never change and are never reused. New work starts at `AR-037`.
+  `AR-037` is `#38`; the backend-era tasks `AR-038` … `AR-044` are `#41` … `#47`.
+- Codes never change and are never reused. New work starts at `AR-045`.
 - Use the code everywhere: branch (`feat/AR-005-…`), commit (`… (AR-005)`),
   comments, and the issue title (`AR-005 · Transactions list …`).
 - The full key → title → sprint table is in [MASTER_PLAN.md](MASTER_PLAN.md).
@@ -65,17 +66,35 @@ GH="C:/Program Files/GitHub CLI/gh.exe"
 | Sprint | Dates | Capacity | Phase |
 | --- | --- | --- | --- |
 | S1 | Nov 16 – Nov 29, 2026 | 31 | Phase 1 |
-| S2 | Nov 30 – Dec 13, 2026 | 23 | Phases 1–2 |
-| S3 | Dec 14 – Dec 27, 2026 | 21 | Phases 2–3 |
-| S4 | Dec 28 – Jan 10, 2027 | 22 | Phase 3 |
-| S5 | Jan 11 – Jan 24, 2027 | 24 | Phase 4 |
+| S2 | Nov 30 – Dec 13, 2026 | 29 | Phase 1 |
+| S3 | Dec 14 – Dec 27, 2026 | 21 | Phases 1–2 (holidays) |
+| S4 | Dec 28 – Jan 10, 2027 | 23 | Phases 1–2 |
+| S5 | Jan 11 – Jan 24, 2027 | 21 | Phase 3 |
+| S6 | Jan 25 – Feb 7, 2027 | 22 | Phases 3–4 |
 
 If the sum for the current sprint exceeds capacity, move the lowest-priority
 item to the next iteration — do not stretch the sprint.
 
-S1 was planned at 26 points and then gained **AR-037** (safe error handling,
-5 pts) as its first task, so 31 is the revised commitment. If velocity lags,
-AR-008 (2 pts) is the first to move to S2.
+Sprint 6 exists because the app became online: network, auth, cache, and the
+write outbox add ~26 net points. Biometric lock and the widget moved to the
+post-MVP backlog instead of stretching every sprint.
+
+### Online behavior in every device pass
+
+Alpha runs against the mock API (`ARAM_API_MODE=mock`); beta/prod run against the
+real backend. For any screen that reads or writes data, the device script must
+include:
+
+1. Airplane mode → cached data still renders, with an offline banner and
+   last-synced time.
+2. Airplane mode → add/edit a transaction → it is accepted, shows a pending
+   state, and survives an app restart.
+3. Reconnect → refresh (or wait for the worker) → the pending row syncs and the
+   banner clears.
+4. Backend unreachable or 5xx → typed error with retry; never a blank screen or
+   endless spinner.
+
+Real token values, emails, and amounts never appear in logs or screenshots.
 
 ### Optional: burn-up chart
 
@@ -88,7 +107,8 @@ this sprint" without a spreadsheet.
 **Planning (Monday, ~30 min)**
 1. Open **Backlog**, filter `sprint:@next` (or empty).
 2. Fill the next iteration: top `P0` first, then `P1`, until points ≈ capacity.
-   Sprint 1 starts with **AR-037** (safety baseline) — pull it first, before any feature work.
+   Sprint 1 starts with **AR-037** (safety baseline), then **AR-038** (network
+   foundation) — pull them first, before any feature work.
 3. Set `Sprint` on each card (drag into the iteration group).
 4. Confirm every item has points, priority, and no blocked dependency
    (see the dependency column in MASTER_PLAN).
@@ -130,11 +150,44 @@ this sprint" without a spreadsheet.
 5. Hands you a numbered device-test script for the alpha APK.
 6. After your report: rebuilds, posts the **Shipped** comment (branch, commit,
    points, verification, follow-ups), commits, pushes, sets **Done**.
+7. Opens a PR into `dev` with a proper title and body, waits for CI, squash
+   merges, deletes the feature branch, and syncs local `dev`.
 
 Never set Done manually before the device pass; the comment is the audit trail
 used for sprint stats and the portfolio case study.
 
-## 6. CLI cheat sheet
+## 6. Pull requests, merging, and branch cleanup
+
+**Every change reaches `dev` through a PR.** Feature branches are short-lived;
+`dev` and `main` are permanent.
+
+| Rule | Detail |
+| --- | --- |
+| Base branch | `dev` for features, fixes, chores, docs. `main` only receives `dev`. |
+| Title | `type(area): summary (AR-0NN)` — e.g. `feat(transactions): group list by month (AR-005)` |
+| Body | Fill `.github/PULL_REQUEST_TEMPLATE.md`: summary, task key + points, verification (CI + device), checklist |
+| Merge | Squash merge, only with green CI and a device pass |
+| Cleanup | The head branch is deleted after merge. `dev` and `main` are **never** deleted. |
+| Release | `dev` → `main` is a release action, not a feature PR; never auto-merged |
+
+Automation in the repo:
+
+- `.github/workflows/cleanup-branches.yml` deletes a head branch when a PR is
+  merged **into `dev`**, and only if the head is neither `dev` nor `main` and
+  lives in this repository (fork branches are left alone).
+- Repository auto-delete is deliberately **off**: enabling it would delete
+  `dev` when the `dev` → `main` release PR merges.
+- Dependabot PRs also target `dev` (`target-branch: "dev"`).
+
+After merging from the CLI:
+
+```bash
+git checkout dev && git pull --ff-only origin dev
+```
+
+If a branch is not merged, leave it alone — cleanup is for merged work only.
+
+## 7. CLI cheat sheet
 
 ```bash
 GH="C:/Program Files/GitHub CLI/gh.exe"   # or just gh if on PATH
@@ -168,7 +221,7 @@ Gotchas:
 - In `item-list --format json`, story points are under `"story Points"` (with the
   space), not `storyPoints`.
 
-## 7. Labels
+## 8. Labels
 
 | Label | Meaning |
 | --- | --- |
@@ -176,7 +229,7 @@ Gotchas:
 | `priority:p0` `priority:p1` `priority:p2` | p0 = blocks the phase, p1 = planned, p2 = nice to have |
 | `phase:1` … `phase:4` | Phase of the roadmap |
 
-## 8. Rules that keep the board honest
+## 9. Rules that keep the board honest
 
 1. Every branch maps to exactly one `AR-0NN`.
 2. Every commit references the key; every PR says `Closes #<issue>`.

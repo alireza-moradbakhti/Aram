@@ -1,8 +1,25 @@
 <resources>
     <string name="welcome_tagline">Save smarter. Spend calmer.</string>
+    <string name="welcome_brand_sub">money, gently</string>
+    <string name="welcome_headline_prefix">Know what you can spend, </string>
+    <string name="welcome_headline_accent">every day.</string>
+    <string name="welcome_lead">Aram turns your salary into one calm daily number — offline, private, and in your currency.</string>
+    <string name="welcome_preview_label">SAFE TO SPEND</string>
+    <string name="welcome_preview_amount">12,400,000</string>
+    <string name="welcome_preview_days">22 days left</string>
+    <string name="welcome_preview_budget">68% of budget</string>
+    <string name="welcome_point_offline_title">Works offline</string>
+    <string name="welcome_point_offline_body">Every change saves on-device first.</string>
+    <string name="welcome_point_private_title">Private by default</string>
+    <string name="welcome_point_private_body">No account needed to start.</string>
+    <string name="welcome_point_currency_title">Built for IRR</string>
+    <string name="welcome_point_currency_body">Zero fraction digits, no rounding lies.</string>
     <string name="welcome_name_label">What should we call you?</string>
     <string name="welcome_name_error">Enter your name to continue</string>
     <string name="welcome_save_error">Could not save your profile. Try again.</string>
     <string name="welcome_create_profile">Get started</string>
-    <string name="welcome_privacy_note">Your data stays on this device.</string>
+    <string name="welcome_sign_in">I already have an account</string>
+    <string name="welcome_sign_in_unavailable">Accounts arrive with sync. Keep saving locally for now.</string>
+    <string name="welcome_terms">By continuing you agree to the Terms and Privacy Policy.</string>
+    <string name="welcome_privacy_note">Your data is private to your account.</string>
 </resources>

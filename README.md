@@ -5,7 +5,7 @@
 <h1 align="center">Aram · آرام</h1>
 
 <p align="center">
-  <strong>An offline-first Android money companion built around one question: “Can I spend this?”</strong>
+  <strong>An offline-capable Android money companion built around one question: “Can I spend this?”</strong>
 </p>
 
 <p align="center">
@@ -31,9 +31,9 @@
 
 Aram is a save-first personal finance app for people who abandon budgeting apps. Instead of dense tables and guilt-driven dashboards, it answers one question with one number: **how much can I safely spend today?**
 
-It is built as a real, production-shaped Android project: multi-module Clean Architecture, MVVM with unidirectional state, an offline Room database designed for a future sync layer, and a CI/CD pipeline that builds, tests, and ships preview APKs from Git tags.
+It is built as a real, production-shaped Android project: multi-module Clean Architecture, MVVM with unidirectional state, an online account backed by a Room cache and a write outbox for offline use, and a CI/CD pipeline that builds, tests, and ships preview APKs from Git tags.
 
-> **Status:** early development. The skeleton (M0) is complete: design system, navigation shell, onboarding, local session, Room schema v1, and CI/CD. Feature work is tracked publicly on the [project board](https://github.com/users/alireza-moradbakhti/projects/6).
+> **Status:** early development. The skeleton (M0) is complete: design system, navigation shell, onboarding, session gate, Room schema v1, and CI/CD. Online foundation (network, mock API, auth, cache, outbox) is next.
 
 ## Design preview
 
@@ -49,7 +49,7 @@ It is built as a real, production-shaped Android project: multi-module Clean Arc
 |---|---|
 | Enter data, browse charts, feel guilty | Answer one question: **“Can I spend this?”** |
 | Configuration before the first insight | Value in under 60 seconds |
-| Account and cloud required | Fully offline; no account, ever — until sync is added on your terms |
+| Account and cloud required | Sign in once; cached data opens offline and writes queue until you reconnect |
 | Dense dashboards | One number, one chart, one next action |
 | Red-alarm notifications | Calm visuals, amber warnings, no shaming |
 
@@ -59,10 +59,11 @@ It is built as a real, production-shaped Android project: multi-module Clean Arc
 
 ### Shipping in the MVP (P0)
 
-- [x] Local profile, default currency, Gregorian/Jalali calendar preference
 - [x] Splash screen, welcome flow, session gate
 - [x] Navigation shell with five destinations
 - [x] Theme: Material 3, light/dark, edge-to-edge
+- [ ] Email/password account with a mock API in alpha and the real API in beta/prod
+- [ ] Cached reads offline, pull-to-refresh, and a sync outbox for queued writes
 - [ ] Accounts with opening balances (cash, bank, wallet, savings, investment)
 - [ ] Income, expense, and transfer transactions
 - [ ] Monthly category budgets with 80% / 100% alerts
@@ -145,7 +146,10 @@ flowchart TD
               ↓
         Repository interface (:core:domain)
               ↓
-        Repository impl (:core:data) → Room · DataStore
+        Repository impl (:core:data)
+              ├── Room cache  ← observed by the UI
+              ├── outbox worker → Ktor API (:core:network) ⇄ backend
+              └── DataStore (session, last sync)
 ```
 
 ### Engineering decisions
@@ -153,12 +157,14 @@ flowchart TD
 | Decision | Why |
 |---|---|
 | **Money as `Long` minor units** | No floating-point drift. Every amount is cents/fils/rials; `BigDecimal` is used only at the input boundary with `HALF_UP` rounding. Handles 0-decimal currencies (JPY, IRR). |
-| **UUID primary keys + `userId` on every row** | Rows can be created offline and pushed later without a server round-trip. |
-| **Soft deletes (`deletedAt`)** | Tombstones survive until a future sync layer reconciles them. |
-| **Swappable auth seam** | Features depend on `AuthRepository`; a remote implementation can replace the local one without touching UI modules. See [AuthRepository.kt](core/domain/src/main/java/com/aram/core/domain/repository/AuthRepository.kt). |
-| **No INTERNET permission** | Offline privacy is a product guarantee, not an afterthought. Add it only when sync ships. |
-| **Defense in depth** | No `INTERNET`, backups disabled, R8 obfuscation, stripped release logs, and signing secrets kept outside git. |
-| **KMP-ready logging** | A pure-Kotlin `:core:logging` module with named events; `sendToServer` defaults to `false` and uploads stay disabled until a backend exists. |
+| **UUID primary keys + `userId` on every row** | Rows are created locally and pushed to the server with their client ids, so offline writes and retries never rewrite identity. |
+| **Soft deletes (`deletedAt`)** | Tombstones propagate deletes through sync and survive until the server has them. |
+| **Swappable auth and API seam** | Features depend on `AuthRepository` and repositories; `ARAM_API_MODE=mock\|remote` swaps a Ktor `MockEngine` for the real backend in DI, with no UI changes. See [API_CONTRACT.md](docs/API_CONTRACT.md). |
+| **Cache-first, outbox writes** | The UI observes Room, so reads never wait on the network. Writes land locally with an outbox entry and sync in the background — offline is a state, not a failure. |
+| **Defense in depth** | HTTPS-only release traffic, backups disabled, R8 obfuscation, stripped release logs, tokens in Keystore-backed storage, and signing secrets kept outside git. |
+| **KMP-ready logging** | A pure-Kotlin `:core:logging` module with named events; `sendToServer` defaults to `false` and remote upload stays opt-in and disabled by default. |
+| **Hilt on Android, DI-agnostic core** | Hilt gives compile-time graph verification in the Android modules; `model`, `money`, `common`, `logging`, `domain`, and `network` take plain constructors, so Koin or a manual graph can serve a future iOS shell without touching shared code. |
+| **One network gate** | Every call goes through `:core:network`'s `safeApiCall` → typed `ApiError` → `AppError`; auth refresh, idempotency keys, retry policy, and sanitized logging are Ktor plugins, not per-call code. |
 | **Custom Canvas charts** | Full control over the calm visual language; no heavyweight chart dependency. |
 | **Version catalog + CI** | One source of truth for versions, and every PR proves the build on a clean Ubuntu runner. |
 | **Staged builds + R8** | `alpha`/`beta`/`prod` flavors keep previews side-by-side with prod; minified releases shrink the APK from ~14 MB to ~1.5 MB, and mapping files are archived for crash triage. |
@@ -173,6 +179,7 @@ flowchart TD
 | Architecture | MVVM · Clean Architecture · multi-module | — |
 | DI | Hilt | 2.60.1 |
 | Persistence | Room · DataStore Preferences | 2.8.5 · 1.3.0 |
+| Network | Ktor Client · kotlinx.serialization | latest stable |
 | Async | Coroutines · Flow | 1.11.0 |
 | Navigation | Navigation Compose | 2.10.2 |
 | Codegen | KSP | 2.3.14 |
@@ -277,8 +284,9 @@ Then `./gradlew :app:assembleProdRelease` produces a properly signed APK. Withou
 
 - **`dev`** — integration branch and the source for every release build.
 - **`main`** — stable branch; mirrors the latest tagged release.
-- **Feature branches** — cut from `dev` as `feat/<issue>-<slug>`, `fix/…`, or `chore/…`; merged back into `dev` only after the CI build and a real-device pass.
-- **Releases** — tag `v*` from `dev`; the release workflow builds `prodRelease`, and `main` is fast-forwarded to the tagged commit.
+- **Feature branches** — cut from `dev` as `feat/AR-005-<slug>`, `fix/…`, or `chore/…`; merged back into `dev` only after the CI build and a real-device pass, through a PR.
+- **Pull requests** — titled `type(area): summary (AR-0NN)`, base `dev`. Merged head branches are deleted automatically; `dev` and `main` are never deleted.
+- **Releases** — tag `v*` from `dev`; the release workflow builds `prodRelease`, and `main` is fast-forwarded to the tagged commit. A `dev` → `main` PR is a release action, never an automatic merge.
 
 ```bash
 git checkout dev && git pull --ff-only origin dev
@@ -325,15 +333,16 @@ Workflows: [CI](.github/workflows/ci.yml) · [Release](.github/workflows/release
 
 | Milestone | Scope | Status |
 |---|---|---|
-| **Phase 0 · Skeleton** | Multi-module Gradle, theme, splash, welcome, navigation shell, Room v1, local session, CI/CD | ✅ Complete |
-| **Phase 1 · Transactions core** | Add/edit/delete, list with month headers, account balances, transfers, search & filters, tests | 🔜 Next |
+| **Phase 0 · Skeleton** | Multi-module Gradle, theme, splash, welcome, navigation shell, Room v1, session gate, CI/CD | ✅ Complete |
+| **Phase 1 · Online transactions core** | Network + mock API, auth, cache-first transactions, offline outbox, balances, transfers, search, tests | 🔜 Next |
 | **Phase 2 · Dashboard & insight** | Safe-to-spend + explainer, month in/out, category donut, 6-month trend, recent transactions | Planned |
 | **Phase 3 · Budgets & goals** | Budget CRUD and alerts, goal contributions, streaks, projection, empty states | Planned |
-| **Phase 4 · Polish & release** | Recurring rules, WorkManager reminders, CSV export, biometric lock, widget, release signing | Planned |
+| **Phase 4 · Polish & release** | Recurring rules, CSV export, settings, release signing, screenshots and case study | Planned |
 
-The step-by-step backlog, sprint iterations, and acceptance criteria live on the **[GitHub Project board](https://github.com/users/alireza-moradbakhti/projects/6)**. Every task carries a stable `AR-0NN` key (`AR-001` … `AR-036` today) used in branches, commits, and comments.
+The step-by-step backlog, sprint iterations, and acceptance criteria live on the **[GitHub Project board](https://github.com/users/alireza-moradbakhti/projects/6)**. Every task carries a stable `AR-0NN` key (`AR-001` … `AR-044` today) used in branches, commits, and comments.
 
 - [docs/MASTER_PLAN.md](docs/MASTER_PLAN.md) — every task with points, sprint, dependencies, the release checklist, and the post-MVP Kotlin Multiplatform migration plan.
+- [docs/API_CONTRACT.md](docs/API_CONTRACT.md) — the client/server contract: auth, resources, envelopes, sync, and the alpha mock.
 - [docs/GITHUB_SCRUM.md](docs/GITHUB_SCRUM.md) — how to read the backlog, the active sprint, story points and capacity, and how to run the sprint loop.
 - [docs/ROADMAP.md](docs/ROADMAP.md) — the sprint-by-sprint narrative.
 
@@ -344,7 +353,8 @@ This is primarily a portfolio and learning project, but feedback and issues are 
 ## Security & privacy
 
 **On-device data**
-- No data leaves the device; the MVP does not request `INTERNET`.
+- The app requests `INTERNET` and talks only to the configured HTTPS API. Data is synced to the user's own account and cached in an app-private Room database.
+- Offline reads come from the cache; offline writes queue in an outbox and sync when connectivity returns.
 - No analytics, crash-reporting, or tracking SDKs.
 - Android backup and device transfer are disabled (`android:allowBackup="false"`), so the finance database cannot be pulled through `adb backup`, cloud backup, or a transfer tool. CSV export is the deliberate, user-driven way out (Phase 4).
 
@@ -356,7 +366,7 @@ This is primarily a portfolio and learning project, but feedback and issues are 
 
 **Keys and secrets**
 - No signing key, password, token, or `.env` file is tracked. Only `.env.example` is committed.
-- Android Keystore (hardware-backed) is the plan for the biometric app lock and any future sync tokens (Phase 4); private keys will never sit in plain preferences.
+- Access and refresh tokens live in Keystore-backed storage; access tokens are short-lived and refresh tokens rotate. Private keys never sit in plain preferences.
 
 **What "public" means**
 - The repository is public by design: source, tests, CI, and the board are part of the portfolio. Nothing sensitive is published.
