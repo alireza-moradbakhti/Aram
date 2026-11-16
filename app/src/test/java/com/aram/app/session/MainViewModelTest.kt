@@ -96,6 +96,8 @@ class MainViewModelTest {
 
         override suspend fun createLocalProfile(displayName: String): Outcome<UserProfile> =
             Outcome.Failure(AppError.Unknown())
+
+        override suspend fun signOut(): Outcome<Unit> = Outcome.Success(Unit)
     }
 
     private companion object {

@@ -1,25 +1,15 @@
 package com.aram.app.navigation
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -27,48 +17,50 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.aram.core.designsystem.component.AramBackground
+import com.aram.core.designsystem.component.AramBottomBar
+import com.aram.core.designsystem.component.AramFab
+import com.aram.core.designsystem.component.AramTab
 import com.aram.core.designsystem.component.ErrorState
+import com.aram.core.designsystem.icon.AramIcons
 import com.aram.core.designsystem.state.UiState
 import com.aram.core.model.UserProfile
 import com.aram.feature.budgets.presentation.BudgetsScreen
 import com.aram.feature.dashboard.presentation.DashboardRoute
-import com.aram.feature.goals.presentation.GoalsScreen
 import com.aram.feature.onboarding.presentation.WelcomeRoute
 import com.aram.feature.settings.presentation.SettingsScreen
-import com.aram.feature.transactions.presentation.TransactionsScreen
+import com.aram.feature.transactions.presentation.TransactionsRoute
 
 @Composable
 fun AramApp(
     sessionState: UiState<UserProfile>,
     onRetrySession: () -> Unit,
+    onSignOut: () -> Unit,
     showDebugActions: Boolean,
     modifier: Modifier = Modifier,
 ) {
     when (sessionState) {
-        UiState.Loading -> Box(
-            modifier = modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
-        )
+        UiState.Loading -> AramBackground(modifier = modifier) {}
 
         UiState.Empty -> WelcomeRoute(modifier = modifier)
 
         is UiState.Content -> MainScaffold(
             profile = sessionState.data,
+            onSignOut = onSignOut,
             showDebugActions = showDebugActions,
             modifier = modifier,
         )
 
-        is UiState.Error -> Box(
-            modifier = modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
-            contentAlignment = Alignment.Center,
-        ) {
-            ErrorState(
-                error = sessionState.error,
-                onRetry = onRetrySession,
-            )
+        is UiState.Error -> AramBackground(modifier = modifier) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                ErrorState(
+                    error = sessionState.error,
+                    onRetry = onRetrySession,
+                )
+            }
         }
     }
 }
@@ -78,76 +70,86 @@ private enum class MainTab(
     val label: String,
     val icon: ImageVector,
 ) {
-    Home("home", "Home", Icons.Filled.Home),
-    Transactions("transactions", "Transactions", Icons.AutoMirrored.Filled.List),
-    Budgets("budgets", "Budgets", Icons.Filled.DateRange),
-    Goals("goals", "Goals", Icons.Filled.Star),
-    Settings("settings", "Settings", Icons.Filled.Settings),
+    Home("home", "Home", AramIcons.home),
+    Activity("activity", "Activity", AramIcons.activity),
+    Budgets("budgets", "Budgets", AramIcons.budgets),
+    Profile("profile", "Profile", AramIcons.profile),
 }
+
+private val tabs = listOf(
+    AramTab(MainTab.Home.label, MainTab.Home.icon),
+    AramTab(MainTab.Activity.label, MainTab.Activity.icon),
+    AramTab(MainTab.Budgets.label, MainTab.Budgets.icon),
+    AramTab(MainTab.Profile.label, MainTab.Profile.icon),
+)
 
 @Composable
 private fun MainScaffold(
     profile: UserProfile,
+    onSignOut: () -> Unit,
     showDebugActions: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
+    val currentTab = MainTab.entries.firstOrNull { tab ->
+        currentDestination?.hierarchy?.any { it.route == tab.route } == true
+    } ?: MainTab.Home
 
-    Scaffold(
-        modifier = modifier,
-        bottomBar = {
-            NavigationBar {
-                MainTab.entries.forEach { tab ->
-                    val selected = currentDestination
-                        ?.hierarchy
-                        ?.any { destination -> destination.route == tab.route } == true
-                    NavigationBarItem(
-                        selected = selected,
-                        onClick = {
-                            navController.navigate(tab.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = {
-                            Icon(
-                                imageVector = tab.icon,
-                                contentDescription = tab.label,
-                            )
-                        },
-                        label = { Text(tab.label) },
+    fun navigateTo(tab: MainTab) {
+        navController.navigate(tab.route) {
+            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+
+    AramBackground(modifier = modifier) {
+        Scaffold(
+            containerColor = Color.Transparent,
+            bottomBar = {
+                Box(Modifier.navigationBarsPadding()) {
+                    AramBottomBar(
+                        tabs = tabs,
+                        selectedIndex = currentTab.ordinal,
+                        onSelect = { index -> navigateTo(MainTab.entries[index]) },
                     )
                 }
-            }
-        },
-    ) { innerPadding ->
-        NavHost(
-            navController = navController,
-            startDestination = MainTab.Home.route,
-            modifier = Modifier.padding(innerPadding),
-        ) {
-            composable(MainTab.Home.route) {
-                DashboardRoute(displayName = profile.displayName)
-            }
-            composable(MainTab.Transactions.route) {
-                TransactionsScreen()
-            }
-            composable(MainTab.Budgets.route) {
-                BudgetsScreen()
-            }
-            composable(MainTab.Goals.route) {
-                GoalsScreen()
-            }
-            composable(MainTab.Settings.route) {
-                SettingsScreen(
-                    displayName = profile.displayName,
-                    showDebugActions = showDebugActions,
-                )
+            },
+            floatingActionButton = {
+                if (currentTab == MainTab.Home) {
+                    AramFab(
+                        onClick = { navigateTo(MainTab.Activity) },
+                        contentDescription = "Add transaction",
+                    )
+                }
+            },
+        ) { innerPadding ->
+            NavHost(
+                navController = navController,
+                startDestination = MainTab.Home.route,
+                modifier = Modifier.padding(innerPadding),
+            ) {
+                composable(MainTab.Home.route) {
+                    DashboardRoute(
+                        displayName = profile.displayName,
+                        onSeeAll = { navigateTo(MainTab.Activity) },
+                    )
+                }
+                composable(MainTab.Activity.route) {
+                    TransactionsRoute()
+                }
+                composable(MainTab.Budgets.route) {
+                    BudgetsScreen()
+                }
+                composable(MainTab.Profile.route) {
+                    SettingsScreen(
+                        displayName = profile.displayName,
+                        showDebugActions = showDebugActions,
+                        onSignOut = onSignOut,
+                    )
+                }
             }
         }
     }

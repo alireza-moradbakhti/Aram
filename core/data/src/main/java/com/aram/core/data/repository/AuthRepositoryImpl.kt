@@ -94,6 +94,18 @@ class AuthRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun signOut(): Outcome<Unit> =
+        safeOutcome(
+            component = COMPONENT,
+            operation = "signOut",
+            logger = logger,
+            mapError = { it.toStorageAwareError() },
+        ) {
+            withContext(dispatchers.io) {
+                sessionDataStore.clear()
+            }
+        }
+
     private fun Throwable.toStorageAwareError(): AppError = when (this) {
         is SQLiteException -> AppError.Storage(this)
         else -> toAppError()

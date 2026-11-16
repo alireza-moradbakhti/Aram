@@ -70,30 +70,31 @@ Most finance apps are built around *tracking* money. Aram is built around *keepi
 
 ## 3. UX flows
 
+The visual source of truth is the prototype in `Designs/Aram` (`index.html` +
+`style.css` + `tokens.json`). Screens use its 16dp window margin, 24dp section
+rhythm, radii (10/14/18/22/28/full), and the Roboto type scale bundled in
+`core/designsystem` (so the device font style cannot leak in). Icons are the
+prototype's stroked set, drawn in `AramIcons`.
+
 ```
 Launch
   └─ Splash (system splash, green field + wallet mark, held while session loads)
-       ├─ No session ─→ Welcome (sign in / register)
-       │                  └─ success → load cached profile → sync in background
-       └─ Session exists ─→ Main shell (bottom nav: Home · Transactions · Budgets · Goals · Settings)
+       ├─ No session ─→ Welcome (name → local profile; "I already have an account" is alpha-stubbed)
+       │                  └─ Get started → local profile saved → Main shell
+       └─ Session exists ─→ Main shell (bottom nav: Home · Activity · Budgets · Profile)
 ```
 
-**Welcome page** — one gradient headline ("Aram"), one tagline (*Save smarter. Spend calmer.*), email + password, a register toggle, and (alpha only) a demo-account shortcut. Privacy note: "Synced to your account; readable offline."
+**Welcome** — brand mark ("Aram / money, gently"), gradient headline, lead, safe-to-spend preview card with ring sheen, three capability points, name field, primary "Get started", ghost sign-in, terms line.
 
-**Home (dashboard)**
-1. Greeting + avatar chip
-2. Safe-to-spend card (big number, days remaining, tapping explains the math)
-3. Month in / out stat cards
-4. Goal progress card(s)
-5. Category donut + recent transactions
+**Home (dashboard)** — greeting + notification button; safe-to-spend hero (days left, % of budget, radial sheen + ring); two stat tiles (this month, saved); four action tiles (Add, Income, Scan, Goal); budgets summary card with ring and two category bars; recent list; center FAB.
 
-**Transactions** — sticky month header, day groups, swipe or long-press to edit/delete; FAB for quick add; filter sheet.
+**Activity** — app bar with search/filter, month nav ("October 2026 · 31 days · N entries"), All/Expenses/Income segmented control, spent/income stat tiles, day groups ("TODAY · 12 OCT" with the day's spend), rows with category icon, title, `category · time · account`, signed amount. FAB opens the add-expense sheet: underlined amount + IRR, live FX preview ("≈ $0.17 · Rate locked at 1,042,000 IRR on save"), scrollable icon category chips, account/date meta rows, note field, primary save.
 
-**Budgets** — month selector, per-category progress ring/bar, summary of total allocated vs. spent.
+**Budgets** — app bar, month nav ("Resets 1 Nov · N days left"), total budget card (spent/left, progress bar, per-day and remaining), icon category cards with progress bars and used/left or over-by labels, "New budget" primary.
 
-**Goals** — cards with progress arc, streak flame count, projected completion date; "Add money" bottom sheet.
+**Profile** — avatar + name + "Local profile" + sync line, stats strip (transactions/budgets/goals), Account group (Edit profile, Security, Notifications), Preferences group (Appearance, Currency, Export), Account access group (danger row) that opens the **Manage account** sheet (edit profile, change password, export, log out, delete). Log out confirms in a design dialog (tinted icon square, ghost Cancel + primary confirm) and returns to Welcome. Release builds hide the Developer group (Simulate crash).
 
-**Settings** — profile, currency, calendar, biometric lock, export, about.
+**Recovery** — an uncaught exception closes the app; the next launch shows a dark "Aram closed unexpectedly" screen with Continue, which clears the marker and resumes into the shell.
 
 ---
 

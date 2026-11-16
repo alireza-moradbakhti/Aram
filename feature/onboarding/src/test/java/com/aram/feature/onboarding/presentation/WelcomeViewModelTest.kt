@@ -119,6 +119,8 @@ class WelcomeViewModelTest {
             createCalls++
             return result
         }
+
+        override suspend fun signOut(): Outcome<Unit> = Outcome.Success(Unit)
     }
 
     private companion object {

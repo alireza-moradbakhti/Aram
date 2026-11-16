@@ -75,3 +75,28 @@ Existing patterns to follow: sealed interfaces for state (`SessionState`,
 
 - Alpha launcher label is `Aram` (was `Aram Alpha`); the alpha icon adds an `α` badge via `app/src/alpha/res/drawable/ic_launcher_foreground.xml`. Application id and the other flavors are unchanged.
 - `RecoveryScreen` now renders inside a `Surface` with the theme background; previously the light window background showed through in dark mode.
+- Design-fidelity pass (bundled at the user's request, scope "make everything like the design" against `Designs/Aram`):
+  - Bundled Roboto (400/500/600/700) in `core/designsystem`; `LocalContentColor` provided by `AramTheme`.
+  - Local stroked icon set `AramIcons` (43 icons, 24-unit viewBox, 1.75 stroke) replaces Material icons.
+  - Rebuilt Welcome, Dashboard, Activity (+ add-expense sheet), Budgets, Profile, Manage-account sheet, logout dialog, FAB, and bottom bar to the prototype's tokens, spacing, and typography.
+  - Add-expense sheet now has the underlined amount with focus tint, FX preview (`≈ $ · rate locked`), icon category chips, account/date meta rows, and the design note field.
+  - Profile logout now uses a design dialog (tinted icon square, ghost Cancel + primary confirm) instead of Material `AlertDialog`.
+
+## Verification log (design pass)
+
+- `./gradlew :app:assembleAlphaDebug test -PbuildDate=20261116` — BUILD SUCCESSFUL (475 tasks).
+- Device (Galaxy A53 5G, Android 16): Welcome → onboarding works; Dashboard/Activity/Budgets/Profile match the prototype in dark; light mode checked on Dashboard and the add-expense sheet; save prepends a row and updates totals; Profile → Manage account → Log out → dialog → Welcome; relaunch after Simulate crash shows the dark recovery screen and Continue returns to the shell.
+
+## Verification log (final device run, 2026-11-16)
+
+Galaxy A53 5G, Android 16, wireless adb; APK `aram-alpha-debug-1-20261116.apk`.
+
+- Fresh install (`adb uninstall` + `adb install`): cold start 1.8 s, Welcome screen, no recovery screen.
+- Empty-name submit: inline "Enter your name to continue", no crash.
+- Name entry → Dashboard: greeting and safe-to-spend render.
+- Rapid tab switching (24 taps over 4 tabs): same PID, no ANR, no fatal logs.
+- Rotation: Home and Activity render in landscape without restart; FAB slightly overlaps the "22 days left" chip on Home and the INCOME card edge on Activity (cosmetic, portrait unaffected). Auto-rotate restored.
+- Airplane mode skipped: adb runs over Wi-Fi and the app has no `INTERNET` permission, so connectivity cannot affect it.
+- Clean relaunch (force-stop → cold start): Dashboard directly, no recovery screen.
+- Session `logcat`: 0 `FATAL EXCEPTION`, 0 `ANR in com.aram`.
+- `./gradlew :app:assembleAlphaDebug test -PbuildDate=20261116` — BUILD SUCCESSFUL.

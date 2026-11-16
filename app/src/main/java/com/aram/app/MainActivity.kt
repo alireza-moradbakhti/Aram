@@ -50,6 +50,7 @@ class MainActivity : ComponentActivity() {
                     AramApp(
                         sessionState = session,
                         onRetrySession = viewModel::retry,
+                        onSignOut = viewModel::signOut,
                         showDebugActions = BuildConfig.DEBUG,
                     )
                 }

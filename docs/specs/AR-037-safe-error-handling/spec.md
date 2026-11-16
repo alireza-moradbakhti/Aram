@@ -4,7 +4,7 @@
 - Phase / Sprint: Phase 1 · Transactions core / Sprint 1
 - Estimate: 5 pts · P0 · Size L
 - Branch: `chore/AR-037-safe-error-handling`
-- Status: In review (device test pending)
+- Status: Done (device test passed 2026-11-16)
 
 ## Problem
 

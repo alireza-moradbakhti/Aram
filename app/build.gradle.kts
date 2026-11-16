@@ -163,7 +163,6 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.bundles.compose)
     implementation(libs.bundles.lifecycle)
-    implementation(libs.androidx.compose.material.icons.core)
 
     debugImplementation(libs.bundles.composeDebug)
 

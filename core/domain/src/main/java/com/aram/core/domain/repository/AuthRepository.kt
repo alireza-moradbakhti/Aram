@@ -10,4 +10,7 @@ interface AuthRepository {
     fun observeSession(): Flow<Outcome<UserProfile?>>
 
     suspend fun createLocalProfile(displayName: String): Outcome<UserProfile>
+
+    /** Drops the session without touching the ledger, which stays on this device. */
+    suspend fun signOut(): Outcome<Unit>
 }
