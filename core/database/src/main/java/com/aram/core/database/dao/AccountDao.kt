@@ -19,6 +19,12 @@ interface AccountDao {
     )
     fun observeByUser(userId: String): Flow<List<AccountEntity>>
 
+    @Query(
+        "SELECT * FROM accounts WHERE userId = :userId AND id = :id " +
+            "AND deletedAt IS NULL",
+    )
+    suspend fun findById(userId: String, id: String): AccountEntity?
+
     @Query("SELECT COUNT(*) FROM accounts WHERE userId = :userId AND deletedAt IS NULL")
     suspend fun countByUser(userId: String): Int
 }
