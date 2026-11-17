@@ -27,13 +27,47 @@ class WelcomeViewModel @Inject constructor(
         }
     }
 
-    fun onCreateProfile() {
+    fun onEmailChange(email: String) {
+        _uiState.update {
+            it.copy(email = email, showEmailError = false, submitState = SubmitState.Idle)
+        }
+    }
+
+    fun onPasswordChange(password: String) {
+        _uiState.update {
+            it.copy(password = password, showPasswordError = false, submitState = SubmitState.Idle)
+        }
+    }
+
+    fun onTogglePasswordVisibility() {
+        _uiState.update { it.copy(passwordVisible = !it.passwordVisible) }
+    }
+
+    fun onAcceptedTermsChange(accepted: Boolean) {
+        _uiState.update {
+            it.copy(acceptedTerms = accepted, showTermsError = false, submitState = SubmitState.Idle)
+        }
+    }
+
+    fun onCreateAccount() {
         val current = _uiState.value
         if (current.submitState is SubmitState.Submitting) return
 
         val name = current.name.trim()
-        if (name.isEmpty()) {
-            _uiState.update { it.copy(showNameError = true) }
+        val email = current.email.trim()
+        val passwordError = passwordStrengthScore(current.password) < 3
+        val nameError = name.isEmpty()
+        val emailError = !isValidEmail(email)
+
+        if (nameError || emailError || passwordError || !current.acceptedTerms) {
+            _uiState.update {
+                it.copy(
+                    showNameError = nameError,
+                    showEmailError = emailError,
+                    showPasswordError = passwordError,
+                    showTermsError = !current.acceptedTerms,
+                )
+            }
             return
         }
 
