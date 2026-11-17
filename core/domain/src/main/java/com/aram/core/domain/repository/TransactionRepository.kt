@@ -11,7 +11,12 @@ import kotlinx.coroutines.flow.Flow
  */
 interface TransactionRepository {
 
-    fun observeTransactions(): Flow<List<Transaction>>
+    fun observeTransactions(
+        fromInclusive: Long = Long.MIN_VALUE,
+        toExclusive: Long = Long.MAX_VALUE,
+    ): Flow<List<Transaction>>
+
+    fun observeRecent(limit: Int): Flow<List<Transaction>>
 
     fun observeTransaction(id: String): Flow<Transaction?>
 
