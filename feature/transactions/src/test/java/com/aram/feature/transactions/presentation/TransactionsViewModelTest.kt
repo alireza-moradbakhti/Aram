@@ -71,7 +71,7 @@ class TransactionsViewModelTest {
         val groups = viewModel.uiState.value.groups
         assertEquals(listOf(LocalDate.of(2026, 10, 12), LocalDate.of(2026, 10, 11)), groups.map { it.date })
         assertEquals(listOf("a", "b", "c"), groups[0].transactions.map { it.id })
-        assertEquals("Food & Drinks · 09:12 · Cash", groups[0].transactions[0].detail)
+        assertEquals("09:12 · Cash", groups[0].transactions[0].detail)
         assertEquals(-42_000, groups[0].totalMinor)
         assertEquals(18_000, groups[0].transactions[0].amountMinor * -1)
         assertTrue(groups[0].transactions[2].incoming)
@@ -185,6 +185,19 @@ class TransactionsViewModelTest {
         val row = viewModel.uiState.value.groups.single().transactions.single()
         assertEquals("Coffee with Nima", row.title)
         assertEquals("Food & Drinks · 09:12 · Cash", row.detail)
+    }
+
+    @Test
+    fun `category-only rows do not repeat the category in the detail`() = runTest(dispatcher) {
+        repository.rows.value = listOf(
+            expense("a", 18_000, "food", "2026-10-12T09:12:00Z"),
+        )
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        val row = viewModel.uiState.value.groups.single().transactions.single()
+        assertEquals("Food & Drinks", row.title)
+        assertEquals("09:12 · Cash", row.detail)
     }
 
     private fun expense(

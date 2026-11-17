@@ -109,7 +109,7 @@ fun TransactionsScreen(
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.94f))
+                    .background(MaterialTheme.colorScheme.background)
                     .padding(horizontal = 16.dp),
             ) {
                 AramMonthNav(

@@ -198,9 +198,10 @@ class TransactionsViewModel @Inject constructor(
         val category = categoryId?.let(categories::get)
         val account = accounts[accountId]
         val incoming = type == TransactionType.INCOME
-        val title = note?.takeIf { it.isNotBlank() } ?: category?.name ?: type.label()
+        val categoryLabel = category?.name ?: type.label()
+        val title = note?.takeIf { it.isNotBlank() } ?: categoryLabel
         val detail = listOfNotNull(
-            category?.name ?: type.label(),
+            categoryLabel.takeIf { it != title },
             TIME_FORMAT.format(Instant.ofEpochMilli(occurredAt).atZone(clock.zone)),
             account?.name,
         ).joinToString(" · ")

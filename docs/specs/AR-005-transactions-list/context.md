@@ -48,15 +48,20 @@
 
 ## Verification log
 
-- `./gradlew :feature:transactions:testDebugUnitTest` — 17/17 pass
-  (9 `TransactionsViewModelTest`, 8 `AddTransactionViewModelTest`).
+- `./gradlew :feature:transactions:testDebugUnitTest` — 18/18 pass
+  (10 `TransactionsViewModelTest`, 8 `AddTransactionViewModelTest`).
 - `./gradlew :app:assembleAlphaDebug test -PbuildDate=20261117` — pass
   (525 tasks).
-- On-device pass: blocked. The phone's wireless debugging went offline after
-  the AR-004 airplane-mode test (`adb devices` shows both known addresses
-  `offline`, reconnect fails). Re-run when the device is reachable:
-  - seeded month renders newest-first day groups with signed totals;
-  - empty month shows the CTA and it opens the add sheet;
-  - save pops back and the new row appears without a relaunch;
-  - month arrows, scope segments, rotation, dark/light;
-  - a 500-row month scrolls without jank.
+- Device SM-A536E, Android 16 (light + dark): the four saved rows render
+  newest-first with `−54.59` spent / `950.00` income and a `−54.59` day total;
+  the October empty state shows its CTA and the CTA opens the sheet; a new
+  `12.34` expense saved through the sheet appears instantly in November with
+  the toast; Expenses/Income scopes filter rows while totals stay complete;
+  month arrows reload the range; rotation keeps the ledger; dark mode and the
+  sticky header match the tokens.
+- 500-row month (seeded in Room): scrolling is smooth — 275 frames, 19 janky
+  (6.9%), p50 18 ms — and the month header stays pinned. Seed rows were
+  removed and the original 4 rows restored afterwards.
+- Two fixes from the device pass: when the note is blank the row detail no
+  longer repeats the category, and the sticky header backdrop is opaque
+  (the 94% tint ghosted rows in landscape).

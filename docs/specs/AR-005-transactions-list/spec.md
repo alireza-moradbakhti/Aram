@@ -4,7 +4,7 @@
 - Phase / Sprint: Phase 1 · Transactions core / Sprint 1
 - Estimate: 5 pts · P0
 - Branch: feat/AR-005-transactions-list (stacked on AR-004)
-- Status: Review — implementation and CI green; on-device pass pending
+- Status: Shipped
 
 ## Problem
 
@@ -24,8 +24,7 @@ state. The ledger must be readable at a glance from Room.
 
 - [x] Ordering is newest first within correct day groups.
 - [x] Empty state offers a clear call to action.
-- [ ] List scrolls smoothly with at least 500 rows. (unit coverage in place;
-      device pass blocked — see verification log)
+- [x] List scrolls smoothly with at least 500 rows.
 
 ## Technical design
 
