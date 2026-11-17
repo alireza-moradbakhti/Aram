@@ -19,6 +19,12 @@ interface CategoryDao {
     )
     fun observeByUser(userId: String): Flow<List<CategoryEntity>>
 
+    @Query(
+        "SELECT * FROM categories WHERE userId = :userId AND id = :id " +
+            "AND deletedAt IS NULL",
+    )
+    suspend fun findById(userId: String, id: String): CategoryEntity?
+
     @Query("SELECT COUNT(*) FROM categories WHERE userId = :userId AND deletedAt IS NULL")
     suspend fun countByUser(userId: String): Int
 }
