@@ -5,6 +5,7 @@ import com.aram.core.data.repository.TransactionRepositoryImpl
 import com.aram.core.datastore.SessionDataStore
 import com.aram.core.datastore.SessionStore
 import com.aram.core.domain.repository.AuthRepository
+import com.aram.core.domain.repository.LedgerDirectory
 import com.aram.core.domain.repository.LedgerLookup
 import com.aram.core.domain.repository.TransactionRepository
 import dagger.Binds
@@ -32,4 +33,8 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindLedgerLookup(implementation: TransactionRepositoryImpl): LedgerLookup
+
+    @Binds
+    @Singleton
+    abstract fun bindLedgerDirectory(implementation: TransactionRepositoryImpl): LedgerDirectory
 }

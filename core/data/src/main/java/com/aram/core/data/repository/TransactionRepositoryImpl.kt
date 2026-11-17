@@ -8,8 +8,11 @@ import com.aram.core.data.mapper.toModel
 import com.aram.core.database.dao.AccountDao
 import com.aram.core.database.dao.CategoryDao
 import com.aram.core.database.dao.TransactionDao
+import com.aram.core.database.entity.AccountEntity
+import com.aram.core.database.entity.CategoryEntity
 import com.aram.core.database.entity.TransactionEntity
 import com.aram.core.datastore.SessionStore
+import com.aram.core.domain.repository.LedgerDirectory
 import com.aram.core.domain.repository.LedgerLookup
 import com.aram.core.domain.repository.TransactionRepository
 import com.aram.core.domain.transaction.TransactionDraft
@@ -41,7 +44,7 @@ class TransactionRepositoryImpl @Inject constructor(
     private val session: SessionStore,
     private val dispatchers: CoroutineDispatchers,
     private val logger: Logger,
-) : TransactionRepository, LedgerLookup {
+) : TransactionRepository, LedgerLookup, LedgerDirectory {
 
     @OptIn(ExperimentalCoroutinesApi::class)
     override fun observeTransactions(
@@ -195,6 +198,35 @@ class TransactionRepositoryImpl @Inject constructor(
             }
         }
     }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun observeAccounts(): Flow<List<Account>> = observeDirectory(
+        name = "observeAccounts",
+        query = accountDao::observeByUser,
+    ) { rows -> rows.map(AccountEntity::toModel).filterNot { it.archived } }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun observeCategories(): Flow<List<Category>> = observeDirectory(
+        name = "observeCategories",
+        query = categoryDao::observeByUser,
+    ) { rows -> rows.map(CategoryEntity::toModel).filterNot { it.archived } }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun <T, R> observeDirectory(
+        name: String,
+        query: (userId: String) -> Flow<List<T>>,
+        mapper: (List<T>) -> List<R>,
+    ): Flow<List<R>> = session.userId
+        .flatMapLatest { userId ->
+            if (userId == null) flowOf(emptyList()) else query(userId)
+        }
+        .map(mapper)
+        .catch { e ->
+            if (e is CancellationException) throw e
+            logger.e(COMPONENT, "$name failed", e)
+            emit(emptyList())
+        }
+        .flowOn(dispatchers.io)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun observeLedger(
