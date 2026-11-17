@@ -30,6 +30,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -99,17 +100,36 @@ private val earlierTransactions = listOf(
 )
 
 @Composable
-fun TransactionsRoute(modifier: Modifier = Modifier) {
-    TransactionsScreen(modifier = modifier)
+fun TransactionsRoute(
+    modifier: Modifier = Modifier,
+    requestAdd: Boolean = false,
+    onAddRequestConsumed: () -> Unit = {},
+) {
+    TransactionsScreen(
+        modifier = modifier,
+        requestAdd = requestAdd,
+        onAddRequestConsumed = onAddRequestConsumed,
+    )
 }
 
 @Composable
-fun TransactionsScreen(modifier: Modifier = Modifier) {
+fun TransactionsScreen(
+    modifier: Modifier = Modifier,
+    requestAdd: Boolean = false,
+    onAddRequestConsumed: () -> Unit = {},
+) {
     var scopeIndex by rememberSaveable { mutableIntStateOf(0) }
     var monthOffset by rememberSaveable { mutableIntStateOf(0) }
     var showEarlier by rememberSaveable { mutableStateOf(false) }
     var showSheet by rememberSaveable { mutableStateOf(false) }
     val added = remember { mutableStateListOf<DemoTransaction>() }
+
+    LaunchedEffect(requestAdd) {
+        if (requestAdd) {
+            showSheet = true
+            onAddRequestConsumed()
+        }
+    }
 
     val allTransactions = buildList {
         addAll(added)

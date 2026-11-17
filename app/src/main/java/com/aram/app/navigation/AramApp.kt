@@ -6,7 +6,11 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -27,9 +31,13 @@ import com.aram.core.designsystem.state.UiState
 import com.aram.core.model.UserProfile
 import com.aram.feature.budgets.presentation.BudgetsScreen
 import com.aram.feature.dashboard.presentation.DashboardRoute
-import com.aram.feature.onboarding.presentation.WelcomeRoute
+import com.aram.feature.onboarding.presentation.AramSplashScreen
+import com.aram.feature.onboarding.presentation.EntryRoute
 import com.aram.feature.settings.presentation.SettingsScreen
 import com.aram.feature.transactions.presentation.TransactionsRoute
+import kotlinx.coroutines.delay
+
+private const val SPLASH_MILLIS = 650L
 
 @Composable
 fun AramApp(
@@ -39,10 +47,23 @@ fun AramApp(
     showDebugActions: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    when (sessionState) {
-        UiState.Loading -> AramBackground(modifier = modifier) {}
+    var splashElapsed by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (!splashElapsed) {
+            delay(SPLASH_MILLIS)
+            splashElapsed = true
+        }
+    }
 
-        UiState.Empty -> WelcomeRoute(modifier = modifier)
+    if (!splashElapsed || sessionState is UiState.Loading) {
+        AramSplashScreen(modifier = modifier)
+        return
+    }
+
+    when (sessionState) {
+        UiState.Loading -> AramSplashScreen(modifier = modifier)
+
+        UiState.Empty -> EntryRoute(modifier = modifier)
 
         is UiState.Content -> MainScaffold(
             profile = sessionState.data,
@@ -96,6 +117,8 @@ private fun MainScaffold(
     val currentTab = MainTab.entries.firstOrNull { tab ->
         currentDestination?.hierarchy?.any { it.route == tab.route } == true
     } ?: MainTab.Home
+    // One-shot request so the Home FAB can open Activity with the sheet expanded.
+    var openAddRequest by rememberSaveable { mutableStateOf(false) }
 
     fun navigateTo(tab: MainTab) {
         navController.navigate(tab.route) {
@@ -120,7 +143,10 @@ private fun MainScaffold(
             floatingActionButton = {
                 if (currentTab == MainTab.Home) {
                     AramFab(
-                        onClick = { navigateTo(MainTab.Activity) },
+                        onClick = {
+                            openAddRequest = true
+                            navigateTo(MainTab.Activity)
+                        },
                         contentDescription = "Add transaction",
                     )
                 }
@@ -138,7 +164,10 @@ private fun MainScaffold(
                     )
                 }
                 composable(MainTab.Activity.route) {
-                    TransactionsRoute()
+                    TransactionsRoute(
+                        requestAdd = openAddRequest,
+                        onAddRequestConsumed = { openAddRequest = false },
+                    )
                 }
                 composable(MainTab.Budgets.route) {
                     BudgetsScreen()

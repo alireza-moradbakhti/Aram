@@ -17,6 +17,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -37,43 +38,76 @@ class WelcomeViewModelTest {
     }
 
     @Test
-    fun `blank name shows the field error without calling the repository`() =
-        runTest(dispatcher) {
-            val repository = FakeAuthRepository()
-            val viewModel = WelcomeViewModel(repository)
+    fun `empty form flags every field without calling the repository`() = runTest(dispatcher) {
+        val repository = FakeAuthRepository()
+        val viewModel = WelcomeViewModel(repository)
 
-            viewModel.onNameChange("   ")
-            viewModel.onCreateProfile()
-            advanceUntilIdle()
+        viewModel.onCreateAccount()
+        advanceUntilIdle()
 
-            assertTrue(viewModel.uiState.value.showNameError)
-            assertEquals(0, repository.createCalls)
-            assertEquals(SubmitState.Idle, viewModel.uiState.value.submitState)
-        }
+        val state = viewModel.uiState.value
+        assertTrue(state.showNameError)
+        assertTrue(state.showEmailError)
+        assertTrue(state.showPasswordError)
+        assertTrue(state.showTermsError)
+        assertEquals(0, repository.createCalls)
+        assertEquals(SubmitState.Idle, state.submitState)
+    }
 
     @Test
-    fun `repository failure becomes a typed submit failure and keeps the name`() =
+    fun `invalid email and weak password block submission`() = runTest(dispatcher) {
+        val repository = FakeAuthRepository()
+        val viewModel = WelcomeViewModel(repository)
+
+        viewModel.onNameChange("Aram")
+        viewModel.onEmailChange("aram@")
+        viewModel.onPasswordChange("123")
+        viewModel.onAcceptedTermsChange(true)
+        viewModel.onCreateAccount()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.showEmailError)
+        assertTrue(viewModel.uiState.value.showPasswordError)
+        assertFalse(viewModel.uiState.value.showNameError)
+        assertEquals(0, repository.createCalls)
+    }
+
+    @Test
+    fun `valid form creates the profile with the trimmed name`() = runTest(dispatcher) {
+        val repository = FakeAuthRepository()
+        val viewModel = WelcomeViewModel(repository)
+        fillValidForm(viewModel)
+
+        viewModel.onCreateAccount()
+        advanceUntilIdle()
+
+        assertEquals(1, repository.createCalls)
+        assertEquals("Aram", repository.lastName)
+    }
+
+    @Test
+    fun `repository failure becomes a typed submit failure and keeps the form`() =
         runTest(dispatcher) {
             val error = AppError.Storage()
             val repository = FakeAuthRepository(result = Outcome.Failure(error))
             val viewModel = WelcomeViewModel(repository)
+            fillValidForm(viewModel)
 
-            viewModel.onNameChange("Aram")
-            viewModel.onCreateProfile()
+            viewModel.onCreateAccount()
             advanceUntilIdle()
 
             val state = viewModel.uiState.value
             assertEquals(SubmitState.Failed(error), state.submitState)
             assertEquals("Aram", state.name)
+            assertEquals("aram@example.com", state.email)
         }
 
     @Test
-    fun `editing the name clears a previous failure`() = runTest(dispatcher) {
+    fun `editing a field clears a previous failure`() = runTest(dispatcher) {
         val repository = FakeAuthRepository(result = Outcome.Failure(AppError.Storage()))
         val viewModel = WelcomeViewModel(repository)
-
-        viewModel.onNameChange("Aram")
-        viewModel.onCreateProfile()
+        fillValidForm(viewModel)
+        viewModel.onCreateAccount()
         advanceUntilIdle()
 
         viewModel.onNameChange("Aram B")
@@ -82,28 +116,52 @@ class WelcomeViewModelTest {
     }
 
     @Test
-    fun `success keeps the form submitting until the session switches`() =
-        runTest(dispatcher) {
-            val viewModel = WelcomeViewModel(FakeAuthRepository(result = Outcome.Success(profile)))
+    fun `success keeps the form submitting until the session switches`() = runTest(dispatcher) {
+        val viewModel = WelcomeViewModel(FakeAuthRepository(result = Outcome.Success(profile)))
+        fillValidForm(viewModel)
 
-            viewModel.onNameChange("Aram")
-            viewModel.onCreateProfile()
-            advanceUntilIdle()
+        viewModel.onCreateAccount()
+        advanceUntilIdle()
 
-            assertTrue(viewModel.uiState.value.submitState is SubmitState.Submitting)
-        }
+        assertTrue(viewModel.uiState.value.submitState is SubmitState.Submitting)
+    }
 
     @Test
     fun `double tap submits only once`() = runTest(dispatcher) {
         val repository = FakeAuthRepository()
         val viewModel = WelcomeViewModel(repository)
+        fillValidForm(viewModel)
 
-        viewModel.onNameChange("Aram")
-        viewModel.onCreateProfile()
-        viewModel.onCreateProfile()
+        viewModel.onCreateAccount()
+        viewModel.onCreateAccount()
         advanceUntilIdle()
 
         assertEquals(1, repository.createCalls)
+    }
+
+    @Test
+    fun `password strength follows the prototype scoring`() {
+        assertEquals(0, passwordStrengthScore(""))
+        assertEquals(1, passwordStrengthScore("abc"))
+        assertEquals(2, passwordStrengthScore("abcdef"))
+        assertEquals(3, passwordStrengthScore("aram1234"))
+        assertEquals(2, passwordStrengthScore("abcdefgh"))
+    }
+
+    @Test
+    fun `email validation accepts plain addresses only`() {
+        assertTrue(isValidEmail("aram@example.com"))
+        assertTrue(isValidEmail(" aram.morad+bills@mail.example.ir "))
+        assertFalse(isValidEmail("aram@"))
+        assertFalse(isValidEmail("aram.example.com"))
+        assertFalse(isValidEmail(""))
+    }
+
+    private fun fillValidForm(viewModel: WelcomeViewModel) {
+        viewModel.onNameChange("Aram")
+        viewModel.onEmailChange("aram@example.com")
+        viewModel.onPasswordChange("aram1234")
+        viewModel.onAcceptedTermsChange(true)
     }
 
     private class FakeAuthRepository(
@@ -111,12 +169,14 @@ class WelcomeViewModelTest {
     ) : AuthRepository {
 
         var createCalls = 0
+        var lastName: String? = null
 
         override fun observeSession(): Flow<Outcome<UserProfile?>> =
             flowOf(Outcome.Success(null))
 
         override suspend fun createLocalProfile(displayName: String): Outcome<UserProfile> {
             createCalls++
+            lastName = displayName
             return result
         }
 

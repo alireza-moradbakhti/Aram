@@ -247,6 +247,50 @@ object AramIcons {
         "M3 7l2-4h14l2 4",
         "M9 12h6",
     )
+
+    val globe: ImageVector = lineIcon(
+        "Globe",
+        "M3,12a9,9 0 1,0 18,0a9,9 0 1,0 -18,0",
+        "M3 12h18",
+        "M12 3c2.5 2.6 3.8 5.6 3.8 9S14.5 18.4 12 21c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3Z",
+    )
+
+    val clock: ImageVector = lineIcon(
+        "Clock",
+        "M3,12a9,9 0 1,0 18,0a9,9 0 1,0 -18,0",
+        "M12 7v5l3 2",
+    )
+
+    val user: ImageVector = lineIcon(
+        "User",
+        "M8,8a4,4 0 1,0 8,0a4,4 0 1,0 -8,0",
+        "M4 21c0-4 3.6-7 8-7s8 3 8 7",
+    )
+
+    val mail: ImageVector = lineIcon(
+        "Mail",
+        "M6 5h12a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3Z",
+        "m4 7 8 6 8-6",
+    )
+
+    val eye: ImageVector = lineIcon(
+        "Eye",
+        "M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6Z",
+        "M10,12a2,2 0 1,0 4,0a2,2 0 1,0 -4,0",
+    )
+
+    val eyeOff: ImageVector = lineIcon(
+        "EyeOff",
+        "M3 3l18 18",
+        "M10.6 6.2A9.9 9.9 0 0 1 12 6c6.4 0 10 6 10 6a17 17 0 0 1-3 3.6M6.4 7.5A16 16 0 0 0 2 12s3.6 6 10 6c1.5 0 2.9-.3 4.1-.9",
+        "M10,12a2,2 0 1,0 4,0a2,2 0 1,0 -4,0",
+    )
+
+    val aramGlyph: ImageVector = lineIcon(
+        "AramGlyph",
+        "M5 19 12 5l7 14",
+        "M8.5 14h7",
+    )
 }
 
 private const val VIEWPORT = 24f

@@ -1,6 +1,5 @@
 package com.aram.feature.onboarding.presentation
 
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -12,7 +11,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -22,15 +20,11 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,74 +32,47 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aram.core.designsystem.AramTextStyles
 import com.aram.core.designsystem.AramTheme
 import com.aram.core.designsystem.aramColors
 import com.aram.core.designsystem.component.AramBackground
 import com.aram.core.designsystem.component.AramGhostButton
-import com.aram.core.designsystem.component.AramMark
 import com.aram.core.designsystem.component.AramPrimaryButton
 import com.aram.core.designsystem.icon.AramIcons
-import com.aram.core.designsystem.state.SubmitState
 import com.aram.feature.onboarding.R
 
 @Composable
-fun WelcomeRoute(
-    modifier: Modifier = Modifier,
-    viewModel: WelcomeViewModel = hiltViewModel(),
-) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    WelcomeScreen(
-        uiState = uiState,
-        onNameChange = viewModel::onNameChange,
-        onCreateProfile = viewModel::onCreateProfile,
-        modifier = modifier,
-    )
-}
-
-@Composable
 fun WelcomeScreen(
-    uiState: WelcomeUiState,
-    onNameChange: (String) -> Unit,
-    onCreateProfile: () -> Unit,
+    onGetStarted: () -> Unit,
+    onSignIn: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val isSubmitting = uiState.submitState is SubmitState.Submitting
-    val hasSubmitError = uiState.submitState is SubmitState.Failed
     val colors = MaterialTheme.aramColors
-    val context = LocalContext.current
 
     AramBackground(modifier = modifier) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.safeDrawing)
-                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 12.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                AramMark(size = 46, corner = 15)
+                BrandMark(size = 46, corner = 15, glyphSize = 22)
                 Spacer(Modifier.width(10.dp))
                 Column {
                     Text(
-                        text = "Aram",
+                        text = stringResource(R.string.splash_tag),
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontSize = 18.sp,
                             lineHeight = 22.sp,
@@ -124,6 +91,8 @@ fun WelcomeScreen(
                         color = colors.textFaint,
                     )
                 }
+                Spacer(Modifier.weight(1f))
+                LanguagePill()
             }
 
             Spacer(Modifier.height(26.dp))
@@ -139,7 +108,11 @@ fun WelcomeScreen(
                         append(headlineAccent)
                     }
                 },
-                style = MaterialTheme.typography.headlineLarge,
+                style = MaterialTheme.typography.headlineLarge.copy(
+                    fontSize = 30.sp,
+                    lineHeight = 36.sp,
+                    letterSpacing = (-0.9).sp,
+                ),
             )
 
             Spacer(Modifier.height(10.dp))
@@ -148,7 +121,7 @@ fun WelcomeScreen(
                 text = stringResource(R.string.welcome_lead),
                 style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
                 color = colors.textDim,
-                modifier = Modifier.widthIn(max = 250.dp),
+                modifier = Modifier.widthIn(max = 252.dp),
             )
 
             Spacer(Modifier.height(24.dp))
@@ -163,7 +136,7 @@ fun WelcomeScreen(
                 body = stringResource(R.string.welcome_point_offline_body),
             )
             WelcomePoint(
-                icon = AramIcons.lock,
+                icon = AramIcons.shield,
                 title = stringResource(R.string.welcome_point_private_title),
                 body = stringResource(R.string.welcome_point_private_body),
             )
@@ -176,88 +149,18 @@ fun WelcomeScreen(
             Spacer(Modifier.height(24.dp))
 
             Column(Modifier.fillMaxWidth()) {
-                val nameError = when {
-                    uiState.showNameError -> stringResource(R.string.welcome_name_error)
-                    hasSubmitError -> stringResource(R.string.welcome_save_error)
-                    else -> null
-                }
-                BasicTextField(
-                    value = uiState.name,
-                    onValueChange = onNameChange,
-                    enabled = !isSubmitting,
-                    singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        color = MaterialTheme.colorScheme.onSurface,
-                    ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    keyboardOptions = KeyboardOptions(
-                        capitalization = KeyboardCapitalization.Words,
-                        imeAction = ImeAction.Done,
-                    ),
-                    keyboardActions = KeyboardActions(onDone = { onCreateProfile() }),
-                    decorationBox = { innerTextField ->
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(52.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(colors.surface1)
-                                .border(
-                                    width = 1.dp,
-                                    color = if (nameError != null) {
-                                        MaterialTheme.colorScheme.error
-                                    } else {
-                                        colors.border
-                                    },
-                                    shape = RoundedCornerShape(14.dp),
-                                )
-                                .padding(horizontal = 16.dp),
-                            contentAlignment = Alignment.CenterStart,
-                        ) {
-                            if (uiState.name.isEmpty()) {
-                                Text(
-                                    text = stringResource(R.string.welcome_name_label),
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = colors.textFaint,
-                                )
-                            }
-                            innerTextField()
-                        }
-                    },
+                AramPrimaryButton(
+                    text = stringResource(R.string.welcome_get_started),
+                    onClick = onGetStarted,
+                    modifier = Modifier.fillMaxWidth(),
                 )
-                if (nameError != null) {
-                    Text(
-                        text = nameError,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(start = 4.dp, top = 6.dp),
-                    )
-                }
+                Spacer(Modifier.height(8.dp))
+                AramGhostButton(
+                    text = stringResource(R.string.welcome_sign_in),
+                    onClick = onSignIn,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
-
-            Spacer(Modifier.height(16.dp))
-
-            AramPrimaryButton(
-                text = stringResource(R.string.welcome_create_profile),
-                onClick = onCreateProfile,
-                loading = isSubmitting,
-                enabled = !isSubmitting,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            Spacer(Modifier.height(8.dp))
-
-            AramGhostButton(
-                text = stringResource(R.string.welcome_sign_in),
-                onClick = {
-                    Toast.makeText(
-                        context,
-                        context.getString(R.string.welcome_sign_in_unavailable),
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
 
             Spacer(Modifier.height(12.dp))
 
@@ -300,7 +203,7 @@ private fun SafeToSpendPreview() {
                 drawCircle(
                     color = Color(0x1AFFFFFF),
                     radius = 95.dp.toPx(),
-                    center = Offset(size.width - 55.dp.toPx(), 39.dp.toPx()),
+                    center = Offset(size.width - 55.dp.toPx(), -56.dp.toPx()),
                     style = Stroke(width = 24.dp.toPx()),
                 )
             }
@@ -309,15 +212,15 @@ private fun SafeToSpendPreview() {
         Column {
             Text(
                 text = stringResource(R.string.welcome_preview_label),
-                style = MaterialTheme.typography.labelMedium,
-                letterSpacing = 0.5.sp,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                letterSpacing = 0.4.sp,
                 color = Color(0xD9FFFFFF),
             )
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(
                     text = stringResource(R.string.welcome_preview_amount),
-                    style = AramTextStyles.heroAmountCompact,
+                    style = AramTextStyles.heroAmountCompact.copy(fontSize = 30.sp),
                     color = Color.White,
                 )
                 Spacer(Modifier.width(5.dp))
@@ -430,10 +333,6 @@ private fun WelcomePoint(
 @Composable
 private fun WelcomeScreenPreview() {
     AramTheme {
-        WelcomeScreen(
-            uiState = WelcomeUiState(),
-            onNameChange = {},
-            onCreateProfile = {},
-        )
+        WelcomeScreen(onGetStarted = {}, onSignIn = {})
     }
 }
