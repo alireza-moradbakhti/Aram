@@ -1,11 +1,15 @@
 package com.aram.core.data.di
 
+import com.aram.core.data.http.SessionTokenProvider
 import com.aram.core.data.repository.AuthRepositoryImpl
+import com.aram.core.datastore.SessionDataStore
+import com.aram.core.datastore.SessionStore
+import com.aram.core.domain.repository.AuthRepository
+import com.aram.core.network.http.TokenProvider
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import com.aram.core.domain.repository.AuthRepository
 import javax.inject.Singleton
 
 @Module
@@ -15,4 +19,12 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindAuthRepository(implementation: AuthRepositoryImpl): AuthRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindSessionStore(implementation: SessionDataStore): SessionStore
+
+    @Binds
+    @Singleton
+    abstract fun bindTokenProvider(implementation: SessionTokenProvider): TokenProvider
 }

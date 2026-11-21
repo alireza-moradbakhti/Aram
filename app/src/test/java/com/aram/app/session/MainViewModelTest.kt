@@ -97,6 +97,18 @@ class MainViewModelTest {
         override suspend fun createLocalProfile(displayName: String): Outcome<UserProfile> =
             Outcome.Failure(AppError.Unknown())
 
+        override suspend fun register(
+            displayName: String,
+            email: String,
+            password: String,
+        ): Outcome<UserProfile> = Outcome.Failure(AppError.Unknown())
+
+        override suspend fun signIn(email: String, password: String): Outcome<UserProfile> =
+            Outcome.Failure(AppError.Unknown())
+
+        override suspend fun updateProfile(displayName: String): Outcome<UserProfile> =
+            Outcome.Failure(AppError.Unknown())
+
         override suspend fun signOut(): Outcome<Unit> = Outcome.Success(Unit)
     }
 

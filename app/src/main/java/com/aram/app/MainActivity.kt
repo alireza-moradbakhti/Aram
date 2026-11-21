@@ -17,6 +17,7 @@ import com.aram.core.designsystem.state.UiState
 import com.aram.core.network.config.ApiMode
 import com.aram.core.network.mock.MockDemoAccount
 import com.aram.core.network.mock.MockScenarioController
+import com.aram.feature.onboarding.presentation.DemoCredentials
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -66,7 +67,7 @@ class MainActivity : ComponentActivity() {
                         debugScenario = scenario.takeIf { BuildConfig.DEBUG && isMockBuild },
                         onSelectDebugScenario = mockScenarios::select,
                         demoCredentials = if (isMockBuild) {
-                            "Alpha demo · ${MockDemoAccount.EMAIL} / ${MockDemoAccount.PASSWORD}"
+                            DemoCredentials(MockDemoAccount.EMAIL, MockDemoAccount.PASSWORD)
                         } else {
                             null
                         },

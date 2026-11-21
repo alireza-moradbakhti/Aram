@@ -28,6 +28,7 @@ import com.aram.core.model.UserProfile
 import com.aram.core.network.mock.MockScenario
 import com.aram.feature.budgets.presentation.BudgetsScreen
 import com.aram.feature.dashboard.presentation.DashboardRoute
+import com.aram.feature.onboarding.presentation.DemoCredentials
 import com.aram.feature.onboarding.presentation.WelcomeRoute
 import com.aram.feature.settings.presentation.DebugScenarioOption
 import com.aram.feature.settings.presentation.SettingsScreen
@@ -41,7 +42,7 @@ fun AramApp(
     showDebugActions: Boolean,
     debugScenario: MockScenario? = null,
     onSelectDebugScenario: (MockScenario) -> Unit = {},
-    demoCredentials: String? = null,
+    demoCredentials: DemoCredentials? = null,
     modifier: Modifier = Modifier,
 ) {
     when (sessionState) {

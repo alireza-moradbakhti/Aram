@@ -21,4 +21,7 @@ interface AccountDao {
 
     @Query("SELECT COUNT(*) FROM accounts WHERE userId = :userId AND deletedAt IS NULL")
     suspend fun countByUser(userId: String): Int
+
+    @Query("DELETE FROM accounts WHERE userId = :userId")
+    suspend fun deleteByUser(userId: String)
 }

@@ -18,4 +18,7 @@ interface BudgetDao {
             "AND periodStartEpochDay = :periodStartEpochDay",
     )
     fun observeForPeriod(userId: String, periodStartEpochDay: Long): Flow<List<BudgetEntity>>
+
+    @Query("DELETE FROM budgets WHERE userId = :userId")
+    suspend fun deleteByUser(userId: String)
 }
