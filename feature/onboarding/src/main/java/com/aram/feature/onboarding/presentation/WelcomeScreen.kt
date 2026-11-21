@@ -48,6 +48,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -68,6 +69,7 @@ import com.aram.feature.onboarding.R
 @Composable
 fun WelcomeRoute(
     modifier: Modifier = Modifier,
+    demoCredentials: String? = null,
     viewModel: WelcomeViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -75,6 +77,7 @@ fun WelcomeRoute(
         uiState = uiState,
         onNameChange = viewModel::onNameChange,
         onCreateProfile = viewModel::onCreateProfile,
+        demoCredentials = demoCredentials,
         modifier = modifier,
     )
 }
@@ -85,6 +88,7 @@ fun WelcomeScreen(
     onNameChange: (String) -> Unit,
     onCreateProfile: () -> Unit,
     modifier: Modifier = Modifier,
+    demoCredentials: String? = null,
 ) {
     val isSubmitting = uiState.submitState is SubmitState.Submitting
     val hasSubmitError = uiState.submitState is SubmitState.Failed
@@ -258,6 +262,18 @@ fun WelcomeScreen(
                 },
                 modifier = Modifier.fillMaxWidth(),
             )
+
+            if (demoCredentials != null) {
+                Text(
+                    text = demoCredentials,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.textFaint,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp),
+                )
+            }
 
             Spacer(Modifier.height(12.dp))
 
