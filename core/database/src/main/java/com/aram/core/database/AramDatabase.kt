@@ -2,6 +2,8 @@ package com.aram.core.database
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.aram.core.database.dao.AccountDao
 import com.aram.core.database.dao.BudgetDao
 import com.aram.core.database.dao.CategoryDao
@@ -29,7 +31,7 @@ import com.aram.core.database.entity.UserEntity
         GoalContributionEntity::class,
         RecurringRuleEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class AramDatabase : RoomDatabase() {
@@ -50,5 +52,14 @@ abstract class AramDatabase : RoomDatabase() {
 
     companion object {
         const val NAME = "arya.db"
+
+        /** Adds the outbox marker; v1 rows are treated as already on the server. */
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE transactions ADD COLUMN pendingPush INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+        }
     }
 }

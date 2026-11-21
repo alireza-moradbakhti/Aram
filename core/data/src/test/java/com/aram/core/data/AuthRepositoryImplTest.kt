@@ -241,6 +241,7 @@ class AuthRepositoryImplTest {
             budgetDao = budgets,
             savingsGoalDao = goals,
             recurringRuleDao = recurring,
+            syncMetadata = FakeSyncMetadataStore(),
             dispatchers = dispatchers,
             logger = Logger(),
             clock = clock,

@@ -18,6 +18,8 @@ import com.aram.core.database.entity.UserEntity
 import com.aram.core.datastore.SessionStore
 import com.aram.core.datastore.SessionToken
 import com.aram.core.datastore.SessionTokenStore
+import com.aram.core.datastore.SyncMetadata
+import com.aram.core.datastore.SyncMetadataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -65,6 +67,19 @@ class FakeCategoryDao : CategoryDao {
     override suspend fun deleteByUser(userId: String) {
         rows.values.removeAll { it.userId == userId }
     }
+
+    override suspend fun softDeleteOrphans(userId: String, keepIds: List<String>, deletedAt: Long): Int {
+        var changed = 0
+        rows.replaceAll { id, row ->
+            if (row.userId == userId && row.deletedAt == null && id !in keepIds) {
+                changed++
+                row.copy(deletedAt = deletedAt, updatedAt = deletedAt)
+            } else {
+                row
+            }
+        }
+        return changed
+    }
 }
 
 class FakeAccountDao : AccountDao {
@@ -87,6 +102,19 @@ class FakeAccountDao : AccountDao {
     override suspend fun deleteByUser(userId: String) {
         rows.values.removeAll { it.userId == userId }
     }
+
+    override suspend fun softDeleteOrphans(userId: String, keepIds: List<String>, deletedAt: Long): Int {
+        var changed = 0
+        rows.replaceAll { id, row ->
+            if (row.userId == userId && row.deletedAt == null && id !in keepIds) {
+                changed++
+                row.copy(deletedAt = deletedAt, updatedAt = deletedAt)
+            } else {
+                row
+            }
+        }
+        return changed
+    }
 }
 
 class FakeTransactionDao : TransactionDao {
@@ -95,6 +123,49 @@ class FakeTransactionDao : TransactionDao {
 
     override suspend fun upsert(transaction: TransactionEntity) {
         rows[transaction.id] = transaction
+    }
+
+    override suspend fun upsertAll(transactions: List<TransactionEntity>) {
+        transactions.forEach { rows[it.id] = it }
+    }
+
+    override suspend fun findByIds(userId: String, ids: List<String>): List<TransactionEntity> =
+        rows.values.filter { it.userId == userId && it.id in ids }
+
+    override suspend fun softDeleteMissing(
+        userId: String,
+        fromInclusive: Long,
+        toExclusive: Long,
+        keepIds: List<String>,
+        deletedAt: Long,
+    ): Int = softDeleteRange(userId, fromInclusive, toExclusive, keepIds, deletedAt)
+
+    override suspend fun softDeleteAllInRange(
+        userId: String,
+        fromInclusive: Long,
+        toExclusive: Long,
+        deletedAt: Long,
+    ): Int = softDeleteRange(userId, fromInclusive, toExclusive, emptyList(), deletedAt)
+
+    private fun softDeleteRange(
+        userId: String,
+        fromInclusive: Long,
+        toExclusive: Long,
+        keepIds: List<String>,
+        deletedAt: Long,
+    ): Int {
+        var changed = 0
+        rows.replaceAll { id, row ->
+            val inRange = row.userId == userId && row.deletedAt == null && !row.pendingPush &&
+                row.occurredAt >= fromInclusive && row.occurredAt < toExclusive
+            if (inRange && id !in keepIds) {
+                changed++
+                row.copy(deletedAt = deletedAt, updatedAt = deletedAt)
+            } else {
+                row
+            }
+        }
+        return changed
     }
 
     override fun observeRange(
@@ -250,5 +321,20 @@ class FakeSessionTokenStore : SessionTokenStore {
 
     override suspend fun clear() {
         token = null
+    }
+}
+
+class FakeSyncMetadataStore : SyncMetadataStore {
+
+    var value: SyncMetadata? = null
+
+    override suspend fun read(): SyncMetadata? = value
+
+    override suspend fun write(metadata: SyncMetadata) {
+        value = metadata
+    }
+
+    override suspend fun clear() {
+        value = null
     }
 }

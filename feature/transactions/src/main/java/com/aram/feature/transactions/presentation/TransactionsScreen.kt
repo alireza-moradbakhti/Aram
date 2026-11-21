@@ -19,10 +19,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -49,9 +52,14 @@ import com.aram.core.designsystem.component.MoneyLabel
 import com.aram.core.designsystem.icon.AramIcons
 import com.aram.core.designsystem.text.formatMinor
 import com.aram.core.designsystem.text.formatSignedMinor
+import com.aram.core.model.SyncState
+import com.aram.core.model.SyncStatus
 import com.aram.core.money.CurrencyCode
+import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.abs
@@ -69,11 +77,12 @@ fun TransactionsRoute(
         onNextMonth = viewModel::onNextMonth,
         onScopeChange = viewModel::onScopeChange,
         onAddTransaction = onAddTransaction,
+        onRefresh = viewModel::onRefresh,
         modifier = modifier,
     )
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun TransactionsScreen(
     state: TransactionsUiState,
@@ -81,11 +90,17 @@ fun TransactionsScreen(
     onNextMonth: () -> Unit,
     onScopeChange: (TransactionScope) -> Unit,
     onAddTransaction: () -> Unit,
+    onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val month = state.month
-    LazyColumn(
+    PullToRefreshBox(
+        isRefreshing = state.sync.status == SyncStatus.REFRESHING,
+        onRefresh = onRefresh,
         modifier = modifier.fillMaxSize(),
+    ) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 88.dp),
     ) {
         item(key = "app-bar") {
@@ -127,6 +142,16 @@ fun TransactionsScreen(
                     options = listOf("All", "Expenses", "Income"),
                     selectedIndex = state.scope.ordinal,
                     onSelect = { index -> onScopeChange(TransactionScope.entries[index]) },
+                )
+            }
+        }
+
+        if (state.sync.status in SYNC_BANNER_STATUSES) {
+            item(key = "sync-banner") {
+                SyncBanner(
+                    state = state.sync,
+                    onRetry = onRefresh,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 )
             }
         }
@@ -184,7 +209,59 @@ fun TransactionsScreen(
             }
         }
     }
+    }
 }
+
+private val SYNC_BANNER_STATUSES = setOf(
+    SyncStatus.OFFLINE,
+    SyncStatus.STALE,
+    SyncStatus.FAILED,
+)
+
+@Composable
+private fun SyncBanner(
+    state: SyncState,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = MaterialTheme.aramColors
+    val message = when (state.status) {
+        SyncStatus.OFFLINE -> "You're offline · showing saved transactions"
+        SyncStatus.FAILED -> "Couldn't refresh · showing saved transactions"
+        else -> {
+            val time = state.lastSyncedAtMillis?.let {
+                SYNC_TIME_FORMAT.format(Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()))
+            }
+            if (time == null) "Couldn't refresh · showing saved transactions"
+            else "Couldn't refresh · synced $time"
+        }
+    }
+    GlassCard(
+        shape = RoundedCornerShape(16.dp),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.labelMedium,
+                color = colors.textDim,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onRetry) {
+                Text(
+                    text = "Retry",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                )
+            }
+        }
+    }
+}
+
+private val SYNC_TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.US)
 
 @Composable
 private fun DayGroup(
@@ -456,6 +533,7 @@ private fun TransactionsScreenDarkPreview() {
             onNextMonth = {},
             onScopeChange = {},
             onAddTransaction = {},
+            onRefresh = {},
         )
     }
 }
@@ -470,6 +548,7 @@ private fun TransactionsScreenLightPreview() {
             onNextMonth = {},
             onScopeChange = {},
             onAddTransaction = {},
+            onRefresh = {},
         )
     }
 }
@@ -491,6 +570,7 @@ private fun TransactionsScreenEmptyPreview() {
             onNextMonth = {},
             onScopeChange = {},
             onAddTransaction = {},
+            onRefresh = {},
         )
     }
 }

@@ -249,6 +249,28 @@ private class FakeTransactionDao : TransactionDao {
         rows[transaction.id] = transaction
     }
 
+    override suspend fun upsertAll(transactions: List<TransactionEntity>) {
+        transactions.forEach { rows[it.id] = it }
+    }
+
+    override suspend fun findByIds(userId: String, ids: List<String>): List<TransactionEntity> =
+        rows.values.filter { it.userId == userId && it.id in ids }
+
+    override suspend fun softDeleteMissing(
+        userId: String,
+        fromInclusive: Long,
+        toExclusive: Long,
+        keepIds: List<String>,
+        deletedAt: Long,
+    ): Int = 0
+
+    override suspend fun softDeleteAllInRange(
+        userId: String,
+        fromInclusive: Long,
+        toExclusive: Long,
+        deletedAt: Long,
+    ): Int = 0
+
     override fun observeRange(
         userId: String,
         fromInclusive: Long,
@@ -340,6 +362,8 @@ private class FakeAccountDao : AccountDao {
     override suspend fun deleteByUser(userId: String) {
         rows.entries.removeAll { it.value.userId == userId }
     }
+
+    override suspend fun softDeleteOrphans(userId: String, keepIds: List<String>, deletedAt: Long): Int = 0
 }
 
 private class FakeCategoryDao : CategoryDao {
@@ -361,4 +385,6 @@ private class FakeCategoryDao : CategoryDao {
     override suspend fun deleteByUser(userId: String) {
         rows.entries.removeAll { it.value.userId == userId }
     }
+
+    override suspend fun softDeleteOrphans(userId: String, keepIds: List<String>, deletedAt: Long): Int = 0
 }

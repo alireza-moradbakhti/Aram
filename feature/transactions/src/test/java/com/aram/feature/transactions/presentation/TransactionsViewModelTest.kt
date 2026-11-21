@@ -1,6 +1,7 @@
 package com.aram.feature.transactions.presentation
 
 import com.aram.core.domain.repository.LedgerDirectory
+import com.aram.core.domain.repository.LedgerSync
 import com.aram.core.domain.repository.TransactionRepository
 import com.aram.core.domain.transaction.TransactionDraft
 import com.aram.core.model.Account
@@ -9,6 +10,7 @@ import com.aram.core.model.AppError
 import com.aram.core.model.Category
 import com.aram.core.model.CategoryKind
 import com.aram.core.model.Outcome
+import com.aram.core.model.SyncState
 import com.aram.core.model.Transaction
 import com.aram.core.model.TransactionType
 import com.aram.core.money.CurrencyCode
@@ -40,6 +42,7 @@ class TransactionsViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private val clock: Clock = Clock.fixed(Instant.parse("2026-10-12T12:00:00Z"), ZoneOffset.UTC)
     private val repository = FakeRangeRepository()
+    private val ledgerSync = FakeLedgerSync()
     private val directory = FakeDirectory(
         accounts = MutableStateFlow(listOf(cash)),
         categories = MutableStateFlow(listOf(food, transport, salary)),
@@ -55,7 +58,7 @@ class TransactionsViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel() = TransactionsViewModel(repository, directory, clock)
+    private fun viewModel() = TransactionsViewModel(repository, directory, ledgerSync, clock)
 
     @Test
     fun `rows group by day newest first with newest rows first`() = runTest(dispatcher) {
@@ -75,6 +78,26 @@ class TransactionsViewModelTest {
         assertEquals(-42_000, groups[0].totalMinor)
         assertEquals(18_000, groups[0].transactions[0].amountMinor * -1)
         assertTrue(groups[0].transactions[2].incoming)
+    }
+
+    @Test
+    fun `opening the screen refreshes the visible month without forcing`() = runTest(dispatcher) {
+        viewModel()
+        advanceUntilIdle()
+
+        assertEquals(listOf(YearMonth.of(2026, 10) to false), ledgerSync.refreshes)
+    }
+
+    @Test
+    fun `pull to refresh forces the current month`() = runTest(dispatcher) {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        ledgerSync.refreshes.clear()
+
+        viewModel.onRefresh()
+        advanceUntilIdle()
+
+        assertEquals(listOf(YearMonth.of(2026, 10) to true), ledgerSync.refreshes)
     }
 
     @Test
@@ -270,6 +293,15 @@ class TransactionsViewModelTest {
             Outcome.Failure(AppError.Storage())
 
         override suspend fun softDelete(id: String): Outcome<Unit> = Outcome.Success(Unit)
+    }
+
+    private class FakeLedgerSync : LedgerSync {
+        override val state = MutableStateFlow(SyncState())
+        val refreshes = mutableListOf<Pair<YearMonth, Boolean>>()
+
+        override suspend fun refresh(month: YearMonth, force: Boolean) {
+            refreshes += month to force
+        }
     }
 
     private companion object {

@@ -3,9 +3,11 @@ package com.aram.feature.transactions.presentation
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aram.core.domain.repository.LedgerDirectory
+import com.aram.core.domain.repository.LedgerSync
 import com.aram.core.domain.repository.TransactionRepository
 import com.aram.core.model.Account
 import com.aram.core.model.Category
+import com.aram.core.model.SyncState
 import com.aram.core.model.Transaction
 import com.aram.core.model.TransactionType
 import com.aram.core.money.CurrencyCode
@@ -57,6 +59,7 @@ data class TransactionsUiState(
     val incomeMinor: Long = 0,
     val incomeCount: Int = 0,
     val previousSpentMinor: Long? = null,
+    val sync: SyncState = SyncState(),
 ) {
 
     val isEmpty: Boolean get() = !loading && groups.isEmpty()
@@ -67,6 +70,7 @@ data class TransactionsUiState(
 class TransactionsViewModel @Inject constructor(
     private val repository: TransactionRepository,
     private val directory: LedgerDirectory,
+    private val ledgerSync: LedgerSync,
     private val clock: Clock,
 ) : ViewModel() {
 
@@ -84,7 +88,19 @@ class TransactionsViewModel @Inject constructor(
                 selectedMonth to selectedScope
             }.flatMapLatest { (selectedMonth, selectedScope) ->
                 observeMonth(selectedMonth, selectedScope)
+            }.combine(ledgerSync.state) { state, sync ->
+                state.copy(sync = sync)
             }.collect { state -> _uiState.value = state }
+        }
+        viewModelScope.launch {
+            month.collect { selectedMonth -> ledgerSync.refresh(selectedMonth) }
+        }
+    }
+
+    /** Pull-to-refresh and the retry action on the sync banner. */
+    fun onRefresh() {
+        viewModelScope.launch {
+            ledgerSync.refresh(month.value, force = true)
         }
     }
 
