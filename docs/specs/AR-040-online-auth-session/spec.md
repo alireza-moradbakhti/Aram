@@ -49,7 +49,7 @@ token out of plain storage, or end a session.
 - [x] Acceptance criteria met
 - [x] Tests added or updated for the new logic
 - [x] `./gradlew :app:assembleAlphaDebug test` passes locally
-- [ ] CI green on the pull request
+- [x] CI green on the pull request
 
 ## Technical design
 

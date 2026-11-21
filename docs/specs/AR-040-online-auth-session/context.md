@@ -74,3 +74,6 @@ Backend: `Desktop/Project/Root/Aram-Api/src/Aram.Api/Features/Auth/AuthEndpoints
   directly, so KSP could not resolve `SessionTokenStore` in `SessionModule`.
   Added an explicit `implementation(project(":core:datastore"))`; `:core:data`
   keeps its own dependency `implementation`, so `:app` needs its own edge.
+- PR #66 (base `feat/AR-039-mock-api-fixtures`) — CI "Alpha build & test" pass.
+  CI previously skipped stacked PRs because `ci.yml` only triggered for
+  `main`/`dev`; the trigger now covers feature/fix/chore/docs/test bases.
