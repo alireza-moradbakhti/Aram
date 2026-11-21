@@ -56,6 +56,9 @@ class FakeCategoryDao : CategoryDao {
     override fun observeByUser(userId: String): Flow<List<CategoryEntity>> =
         MutableStateFlow(rows.values.filter { it.userId == userId && it.deletedAt == null })
 
+    override suspend fun findById(userId: String, id: String): CategoryEntity? =
+        rows[id]?.takeIf { it.userId == userId && it.deletedAt == null }
+
     override suspend fun countByUser(userId: String): Int =
         rows.values.count { it.userId == userId && it.deletedAt == null }
 
@@ -75,6 +78,9 @@ class FakeAccountDao : AccountDao {
     override fun observeByUser(userId: String): Flow<List<AccountEntity>> =
         MutableStateFlow(rows.values.filter { it.userId == userId && it.deletedAt == null })
 
+    override suspend fun findById(userId: String, id: String): AccountEntity? =
+        rows[id]?.takeIf { it.userId == userId && it.deletedAt == null }
+
     override suspend fun countByUser(userId: String): Int =
         rows.values.count { it.userId == userId && it.deletedAt == null }
 
@@ -91,8 +97,58 @@ class FakeTransactionDao : TransactionDao {
         rows[transaction.id] = transaction
     }
 
+    override fun observeRange(
+        userId: String,
+        fromInclusive: Long,
+        toExclusive: Long,
+    ): Flow<List<TransactionEntity>> = MutableStateFlow(
+        rows.values
+            .filter { it.userId == userId && it.deletedAt == null && it.occurredAt in fromInclusive until toExclusive }
+            .sortedByDescending { it.occurredAt },
+    )
+
     override fun observeRecent(userId: String, limit: Int): Flow<List<TransactionEntity>> =
-        MutableStateFlow(rows.values.filter { it.userId == userId }.take(limit))
+        MutableStateFlow(rows.values.filter { it.userId == userId && it.deletedAt == null }.take(limit))
+
+    override fun observeById(userId: String, id: String): Flow<TransactionEntity?> =
+        MutableStateFlow(rows[id]?.takeIf { it.userId == userId && it.deletedAt == null })
+
+    override suspend fun findById(userId: String, id: String): TransactionEntity? =
+        rows[id]?.takeIf { it.userId == userId && it.deletedAt == null }
+
+    override suspend fun update(
+        userId: String,
+        id: String,
+        accountId: String,
+        categoryId: String?,
+        type: String,
+        amountMinor: Long,
+        currencyCode: String,
+        occurredAt: Long,
+        note: String?,
+        updatedAt: Long,
+    ): Int {
+        val current = rows[id] ?: return 0
+        if (current.userId != userId || current.deletedAt != null) return 0
+        rows[id] = current.copy(
+            accountId = accountId,
+            categoryId = categoryId,
+            type = type,
+            amountMinor = amountMinor,
+            currencyCode = currencyCode,
+            occurredAt = occurredAt,
+            note = note,
+            updatedAt = updatedAt,
+        )
+        return 1
+    }
+
+    override suspend fun softDelete(userId: String, id: String, deletedAt: Long): Int {
+        val current = rows[id] ?: return 0
+        if (current.userId != userId || current.deletedAt != null) return 0
+        rows[id] = current.copy(deletedAt = deletedAt, updatedAt = deletedAt)
+        return 1
+    }
 
     override fun observeTotal(
         userId: String,

@@ -315,6 +315,10 @@ private class FakeTransactionDao : TransactionDao {
         fromInclusive: Long,
         toExclusive: Long,
     ): Flow<Long> = flowOf(0L)
+
+    override suspend fun deleteByUser(userId: String) {
+        rows.entries.removeAll { it.value.userId == userId }
+    }
 }
 
 private class FakeAccountDao : AccountDao {
@@ -332,6 +336,10 @@ private class FakeAccountDao : AccountDao {
 
     override suspend fun countByUser(userId: String): Int =
         rows.values.count { it.userId == userId && it.deletedAt == null }
+
+    override suspend fun deleteByUser(userId: String) {
+        rows.entries.removeAll { it.value.userId == userId }
+    }
 }
 
 private class FakeCategoryDao : CategoryDao {
@@ -349,4 +357,8 @@ private class FakeCategoryDao : CategoryDao {
 
     override suspend fun countByUser(userId: String): Int =
         rows.values.count { it.userId == userId && it.deletedAt == null }
+
+    override suspend fun deleteByUser(userId: String) {
+        rows.entries.removeAll { it.value.userId == userId }
+    }
 }
