@@ -1,5 +1,6 @@
 package com.aram.core.data.di
 
+import com.aram.core.data.http.SessionTokenProvider
 import com.aram.core.data.repository.AuthRepositoryImpl
 import com.aram.core.data.repository.TransactionRepositoryImpl
 import com.aram.core.datastore.SessionDataStore
@@ -8,6 +9,7 @@ import com.aram.core.domain.repository.AuthRepository
 import com.aram.core.domain.repository.LedgerDirectory
 import com.aram.core.domain.repository.LedgerLookup
 import com.aram.core.domain.repository.TransactionRepository
+import com.aram.core.network.http.TokenProvider
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -25,6 +27,10 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindSessionStore(implementation: SessionDataStore): SessionStore
+
+    @Binds
+    @Singleton
+    abstract fun bindTokenProvider(implementation: SessionTokenProvider): TokenProvider
 
     @Binds
     @Singleton

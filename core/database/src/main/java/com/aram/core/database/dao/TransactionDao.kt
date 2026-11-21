@@ -73,4 +73,7 @@ interface TransactionDao {
             "AND occurredAt BETWEEN :fromInclusive AND :toExclusive",
     )
     fun observeTotal(userId: String, type: String, fromInclusive: Long, toExclusive: Long): Flow<Long>
+
+    @Query("DELETE FROM transactions WHERE userId = :userId")
+    suspend fun deleteByUser(userId: String)
 }

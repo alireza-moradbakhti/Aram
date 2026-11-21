@@ -31,9 +31,12 @@ import com.aram.core.designsystem.component.ErrorState
 import com.aram.core.designsystem.icon.AramIcons
 import com.aram.core.designsystem.state.UiState
 import com.aram.core.model.UserProfile
+import com.aram.core.network.mock.MockScenario
 import com.aram.feature.budgets.presentation.BudgetsScreen
 import com.aram.feature.dashboard.presentation.DashboardRoute
+import com.aram.feature.onboarding.presentation.DemoCredentials
 import com.aram.feature.onboarding.presentation.WelcomeRoute
+import com.aram.feature.settings.presentation.DebugScenarioOption
 import com.aram.feature.settings.presentation.SettingsScreen
 import com.aram.feature.transactions.presentation.AddTransactionRoute
 import com.aram.feature.transactions.presentation.TransactionsRoute
@@ -47,17 +50,25 @@ fun AramApp(
     onRetrySession: () -> Unit,
     onSignOut: () -> Unit,
     showDebugActions: Boolean,
+    debugScenario: MockScenario? = null,
+    onSelectDebugScenario: (MockScenario) -> Unit = {},
+    demoCredentials: DemoCredentials? = null,
     modifier: Modifier = Modifier,
 ) {
     when (sessionState) {
         UiState.Loading -> AramBackground(modifier = modifier) {}
 
-        UiState.Empty -> WelcomeRoute(modifier = modifier)
+        UiState.Empty -> WelcomeRoute(
+            demoCredentials = demoCredentials,
+            modifier = modifier,
+        )
 
         is UiState.Content -> MainScaffold(
             profile = sessionState.data,
             onSignOut = onSignOut,
             showDebugActions = showDebugActions,
+            debugScenario = debugScenario,
+            onSelectDebugScenario = onSelectDebugScenario,
             modifier = modifier,
         )
 
@@ -98,6 +109,8 @@ private fun MainScaffold(
     profile: UserProfile,
     onSignOut: () -> Unit,
     showDebugActions: Boolean,
+    debugScenario: MockScenario?,
+    onSelectDebugScenario: (MockScenario) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val navController = rememberNavController()
@@ -172,6 +185,23 @@ private fun MainScaffold(
                     SettingsScreen(
                         displayName = profile.displayName,
                         showDebugActions = showDebugActions,
+                        debugScenarios = if (debugScenario == null) {
+                            emptyList()
+                        } else {
+                            MockScenario.entries.map { scenario ->
+                                DebugScenarioOption(
+                                    id = scenario.name,
+                                    label = scenario.label,
+                                    isFailure = scenario.isFailure,
+                                )
+                            }
+                        },
+                        activeDebugScenarioId = debugScenario?.name,
+                        onSelectDebugScenario = { id ->
+                            MockScenario.entries
+                                .firstOrNull { it.name == id }
+                                ?.let(onSelectDebugScenario)
+                        },
                         onSignOut = onSignOut,
                     )
                 }

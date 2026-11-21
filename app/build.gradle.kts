@@ -201,6 +201,7 @@ if (releaseKeystore == null) {
 
 dependencies {
     implementation(project(":core:data"))
+    implementation(project(":core:datastore"))
     implementation(project(":core:designsystem"))
     implementation(project(":core:domain"))
     implementation(project(":core:logging"))

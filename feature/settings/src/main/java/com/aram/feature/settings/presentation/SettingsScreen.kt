@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -55,11 +56,20 @@ import com.aram.core.designsystem.component.AramPrimaryButton
 import com.aram.core.designsystem.component.GlassCard
 import com.aram.core.designsystem.icon.AramIcons
 
+data class DebugScenarioOption(
+    val id: String,
+    val label: String,
+    val isFailure: Boolean,
+)
+
 @Composable
 fun SettingsScreen(
     displayName: String,
     onSignOut: () -> Unit,
     showDebugActions: Boolean = false,
+    debugScenarios: List<DebugScenarioOption> = emptyList(),
+    activeDebugScenarioId: String? = null,
+    onSelectDebugScenario: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -203,6 +213,37 @@ fun SettingsScreen(
                 label = "Developer",
                 modifier = Modifier.padding(top = 24.dp),
             ) {
+                if (debugScenarios.isNotEmpty()) {
+                    Text(
+                        text = "Network scenario",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.textDim,
+                        modifier = Modifier.padding(start = 14.dp, top = 14.dp, bottom = 10.dp),
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        debugScenarios.forEach { option ->
+                            val selected = option.id == activeDebugScenarioId
+                            AramChip(
+                                text = option.label,
+                                tone = when {
+                                    selected && option.isFailure -> AramChipTone.Danger
+                                    selected -> AramChipTone.Positive
+                                    else -> AramChipTone.Neutral
+                                },
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .clickable { onSelectDebugScenario(option.id) },
+                            )
+                        }
+                    }
+                    RowDivider()
+                }
                 SettingRow(
                     icon = AramIcons.bug,
                     title = "Simulate crash",

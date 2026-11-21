@@ -27,4 +27,7 @@ interface CategoryDao {
 
     @Query("SELECT COUNT(*) FROM categories WHERE userId = :userId AND deletedAt IS NULL")
     suspend fun countByUser(userId: String): Int
+
+    @Query("DELETE FROM categories WHERE userId = :userId")
+    suspend fun deleteByUser(userId: String)
 }
