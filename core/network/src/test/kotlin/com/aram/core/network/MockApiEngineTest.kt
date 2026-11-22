@@ -8,10 +8,12 @@ import com.aram.core.network.api.safeApiCallBare
 import com.aram.core.network.config.ApiPaths
 import com.aram.core.network.config.EndpointProvider
 import com.aram.core.network.dto.AuthResponseDto
+import com.aram.core.network.dto.BudgetDto
 import com.aram.core.network.dto.HealthCheckDto
 import com.aram.core.network.dto.LoginRequest
 import com.aram.core.network.dto.ProfileDto
 import com.aram.core.network.dto.RegisterRequest
+import com.aram.core.network.dto.SaveBudgetRequest
 import com.aram.core.network.dto.SaveTransactionRequest
 import com.aram.core.network.dto.SyncPullDto
 import com.aram.core.network.dto.SyncPushRequest
@@ -219,6 +221,26 @@ class MockApiEngineTest {
         assertTrue(snapshot.budgets.isNotEmpty())
         assertTrue(snapshot.goals.isNotEmpty())
         assertTrue(snapshot.settings != null)
+    }
+
+    @Test
+    fun `a duplicate budget is a conflict`() = runTest {
+        val tokens = MutableTokens()
+        val (client, _) = engineClient(tokens = tokens)
+        tokens.token = (client.login(MockDemoAccount.EMAIL, MockDemoAccount.PASSWORD) as ApiResult.Success).data.token
+
+        val result = safeApiCall<BudgetDto>(
+            client,
+            logger,
+            HttpMethod.Post,
+            endpoints.url(ApiPaths.BUDGETS),
+            configure = {
+                jsonBody(SaveBudgetRequest(categorySlug = "groceries", monthlyLimitIrr = 12_000_000.0))
+            },
+            retryPolicy = noRetry,
+        )
+        val error = (result as ApiResult.Failure).error as ApiError.Conflict
+        assertEquals("A budget already exists for Groceries.", error.message)
     }
 
     @Test
