@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aram.core.domain.repository.LedgerDirectory
 import com.aram.core.domain.repository.LedgerSync
+import com.aram.core.domain.repository.OutboxSnapshot
+import com.aram.core.domain.repository.OutboxSync
 import com.aram.core.domain.repository.TransactionRepository
 import com.aram.core.model.Account
 import com.aram.core.model.Category
@@ -39,6 +41,7 @@ data class TransactionRowUi(
     val amountMinor: Long,
     val fractionDigits: Int,
     val incoming: Boolean,
+    val pendingSync: Boolean = false,
 )
 
 data class DayGroupUi(
@@ -60,6 +63,7 @@ data class TransactionsUiState(
     val incomeCount: Int = 0,
     val previousSpentMinor: Long? = null,
     val sync: SyncState = SyncState(),
+    val outbox: OutboxSnapshot = OutboxSnapshot(),
 ) {
 
     val isEmpty: Boolean get() = !loading && groups.isEmpty()
@@ -71,6 +75,7 @@ class TransactionsViewModel @Inject constructor(
     private val repository: TransactionRepository,
     private val directory: LedgerDirectory,
     private val ledgerSync: LedgerSync,
+    private val outboxSync: OutboxSync,
     private val clock: Clock,
 ) : ViewModel() {
 
@@ -90,6 +95,8 @@ class TransactionsViewModel @Inject constructor(
                 observeMonth(selectedMonth, selectedScope)
             }.combine(ledgerSync.state) { state, sync ->
                 state.copy(sync = sync)
+            }.combine(outboxSync.snapshot) { state, outbox ->
+                state.copy(outbox = outbox)
             }.collect { state -> _uiState.value = state }
         }
         viewModelScope.launch {
@@ -100,6 +107,16 @@ class TransactionsViewModel @Inject constructor(
     /** Pull-to-refresh and the retry action on the sync banner. */
     fun onRefresh() {
         viewModelScope.launch {
+            outboxSync.flush()
+            ledgerSync.refresh(month.value, force = true)
+        }
+    }
+
+    /** Re-queues entries parked by a permanent rejection, then pushes them. */
+    fun onRetryQueued() {
+        viewModelScope.launch {
+            outboxSync.retryFailed()
+            outboxSync.flush()
             ledgerSync.refresh(month.value, force = true)
         }
     }
@@ -229,6 +246,7 @@ class TransactionsViewModel @Inject constructor(
             amountMinor = if (incoming) amountMinor else -amountMinor,
             fractionDigits = fractionDigits,
             incoming = incoming,
+            pendingSync = pendingPush,
         )
     }
 

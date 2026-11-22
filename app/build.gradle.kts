@@ -221,7 +221,10 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.hilt.android)
     implementation(libs.androidx.hilt.navigation.compose)
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.hilt.work)
     ksp(libs.hilt.compiler)
+    ksp(libs.androidx.hilt.compiler)
 
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.okhttp)

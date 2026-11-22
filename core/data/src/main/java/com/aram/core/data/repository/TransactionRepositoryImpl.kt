@@ -7,13 +7,18 @@ import com.aram.core.common.error.toAppError
 import com.aram.core.data.mapper.toModel
 import com.aram.core.database.dao.AccountDao
 import com.aram.core.database.dao.CategoryDao
+import com.aram.core.database.dao.LedgerWriteDao
 import com.aram.core.database.dao.TransactionDao
 import com.aram.core.database.entity.AccountEntity
 import com.aram.core.database.entity.CategoryEntity
+import com.aram.core.database.entity.SyncOutboxEntity
 import com.aram.core.database.entity.TransactionEntity
+import com.aram.core.data.outbox.categorySlug
+import com.aram.core.data.outbox.outboxEntry
 import com.aram.core.datastore.SessionStore
 import com.aram.core.domain.repository.LedgerDirectory
 import com.aram.core.domain.repository.LedgerLookup
+import com.aram.core.domain.repository.OutboxTrigger
 import com.aram.core.domain.repository.TransactionRepository
 import com.aram.core.domain.transaction.TransactionDraft
 import com.aram.core.logging.Logger
@@ -41,6 +46,8 @@ class TransactionRepositoryImpl @Inject constructor(
     private val transactionDao: TransactionDao,
     private val accountDao: AccountDao,
     private val categoryDao: CategoryDao,
+    private val writeDao: LedgerWriteDao,
+    private val outboxTrigger: OutboxTrigger,
     private val session: SessionStore,
     private val dispatchers: CoroutineDispatchers,
     private val logger: Logger,
@@ -103,7 +110,20 @@ class TransactionRepositoryImpl @Inject constructor(
                     deletedAt = null,
                     pendingPush = true,
                 )
-                transactionDao.upsert(entity)
+                writeDao.createWithOutbox(
+                    transaction = entity,
+                    entry = outboxEntry(
+                        userId = userId,
+                        entity = entity,
+                        op = SyncOutboxEntity.OP_CREATE,
+                        categorySlug = categorySlug(
+                            draft.categoryId,
+                            draft.categoryId?.let { categoryDao.findById(userId, it) },
+                        ),
+                        now = now,
+                    ),
+                )
+                outboxTrigger.schedule()
                 entity.toModel()
             }
         }
@@ -122,7 +142,19 @@ class TransactionRepositoryImpl @Inject constructor(
         ) {
             withContext(dispatchers.io) {
                 val now = System.currentTimeMillis()
-                val changed = transactionDao.update(
+                val existing = transactionDao.findById(userId, id) ?: throw RowNotFound()
+                val updated = existing.copy(
+                    accountId = draft.accountId,
+                    categoryId = draft.categoryId,
+                    type = draft.type.name,
+                    amountMinor = draft.amountMinor,
+                    currencyCode = draft.currencyCode,
+                    occurredAt = draft.occurredAt,
+                    note = draft.note.cleanedNote(),
+                    updatedAt = now,
+                    pendingPush = true,
+                )
+                val changed = writeDao.updateWithOutbox(
                     userId = userId,
                     id = id,
                     accountId = draft.accountId,
@@ -133,11 +165,22 @@ class TransactionRepositoryImpl @Inject constructor(
                     occurredAt = draft.occurredAt,
                     note = draft.note.cleanedNote(),
                     updatedAt = now,
+                    entry = outboxEntry(
+                        userId = userId,
+                        entity = updated,
+                        op = SyncOutboxEntity.OP_UPDATE,
+                        categorySlug = categorySlug(
+                            draft.categoryId,
+                            draft.categoryId?.let { categoryDao.findById(userId, it) },
+                        ),
+                        now = now,
+                    ),
                 )
                 if (changed == 0) {
                     throw RowNotFound()
                 }
-                transactionDao.findById(userId, id)?.toModel() ?: throw RowNotFound()
+                outboxTrigger.schedule()
+                updated.toModel()
             }
         }
     }
@@ -154,14 +197,24 @@ class TransactionRepositoryImpl @Inject constructor(
             mapError = { it.toStorageAwareError() },
         ) {
             withContext(dispatchers.io) {
-                val changed = transactionDao.softDelete(
+                val now = System.currentTimeMillis()
+                val existing = transactionDao.findById(userId, id) ?: throw RowNotFound()
+                val changed = writeDao.deleteWithOutbox(
                     userId = userId,
                     id = id,
-                    deletedAt = System.currentTimeMillis(),
+                    deletedAt = now,
+                    entry = outboxEntry(
+                        userId = userId,
+                        entity = existing.copy(deletedAt = now, updatedAt = now),
+                        op = SyncOutboxEntity.OP_DELETE,
+                        categorySlug = null,
+                        now = now,
+                    ),
                 )
                 if (changed == 0) {
                     throw RowNotFound()
                 }
+                outboxTrigger.schedule()
             }
         }
     }

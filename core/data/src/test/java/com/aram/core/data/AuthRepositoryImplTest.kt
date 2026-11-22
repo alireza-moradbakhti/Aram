@@ -203,6 +203,7 @@ class AuthRepositoryImplTest {
         val budgets = FakeBudgetDao()
         val goals = FakeSavingsGoalDao()
         val recurring = FakeRecurringRuleDao()
+        val outbox = FakeSyncOutboxDao()
         val sessionStore = FakeSessionStore()
         val tokenStore = FakeSessionTokenStore()
 
@@ -241,6 +242,7 @@ class AuthRepositoryImplTest {
             budgetDao = budgets,
             savingsGoalDao = goals,
             recurringRuleDao = recurring,
+            outboxDao = outbox,
             syncMetadata = FakeSyncMetadataStore(),
             dispatchers = dispatchers,
             logger = Logger(),

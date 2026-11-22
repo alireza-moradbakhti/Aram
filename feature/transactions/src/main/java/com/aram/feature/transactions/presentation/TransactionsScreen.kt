@@ -78,6 +78,7 @@ fun TransactionsRoute(
         onScopeChange = viewModel::onScopeChange,
         onAddTransaction = onAddTransaction,
         onRefresh = viewModel::onRefresh,
+        onRetryQueued = viewModel::onRetryQueued,
         modifier = modifier,
     )
 }
@@ -91,6 +92,7 @@ fun TransactionsScreen(
     onScopeChange: (TransactionScope) -> Unit,
     onAddTransaction: () -> Unit,
     onRefresh: () -> Unit,
+    onRetryQueued: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val month = state.month
@@ -151,6 +153,17 @@ fun TransactionsScreen(
                 SyncBanner(
                     state = state.sync,
                     onRetry = onRefresh,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+            }
+        }
+
+        if (state.queueMessage() != null) {
+            item(key = "outbox-banner") {
+                OutboxBanner(
+                    message = state.queueMessage() ?: "",
+                    action = if (state.outbox.failed > 0) "Retry" else "Sync now",
+                    onAction = onRetryQueued,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 )
             }
@@ -263,6 +276,47 @@ private fun SyncBanner(
 
 private val SYNC_TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.US)
 
+private fun TransactionsUiState.queueMessage(): String? = when {
+    outbox.failed == 1 -> "1 change couldn't sync"
+    outbox.failed > 1 -> "${outbox.failed} changes couldn't sync"
+    outbox.pending == 1 -> "1 change waiting to sync"
+    outbox.pending > 1 -> "${outbox.pending} changes waiting to sync"
+    else -> null
+}
+
+@Composable
+private fun OutboxBanner(
+    message: String,
+    action: String,
+    onAction: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = MaterialTheme.aramColors
+    GlassCard(
+        shape = RoundedCornerShape(16.dp),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = "$message · saved on this device",
+                style = MaterialTheme.typography.labelMedium,
+                color = colors.textDim,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onAction) {
+                Text(
+                    text = action,
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun DayGroup(
     group: DayGroupUi,
@@ -350,11 +404,20 @@ private fun TransactionRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            MoneyLabel(
-                amount = transaction.amountMinor,
-                incoming = transaction.incoming,
-                fractionDigits = transaction.fractionDigits,
-            )
+            Column(horizontalAlignment = Alignment.End) {
+                MoneyLabel(
+                    amount = transaction.amountMinor,
+                    incoming = transaction.incoming,
+                    fractionDigits = transaction.fractionDigits,
+                )
+                if (transaction.pendingSync) {
+                    Text(
+                        text = "Queued",
+                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.sp),
+                        color = colors.textFaint,
+                    )
+                }
+            }
         }
         if (showDivider) {
             HorizontalDivider(color = colors.border, thickness = 1.dp)

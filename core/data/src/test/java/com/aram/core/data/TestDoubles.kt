@@ -3,7 +3,9 @@ package com.aram.core.data
 import com.aram.core.database.dao.AccountDao
 import com.aram.core.database.dao.BudgetDao
 import com.aram.core.database.dao.CategoryDao
+import com.aram.core.database.dao.LedgerWriteDao
 import com.aram.core.database.dao.RecurringRuleDao
+import com.aram.core.database.dao.SyncOutboxDao
 import com.aram.core.database.dao.SavingsGoalDao
 import com.aram.core.database.dao.TransactionDao
 import com.aram.core.database.dao.UserDao
@@ -12,6 +14,7 @@ import com.aram.core.database.entity.BudgetEntity
 import com.aram.core.database.entity.CategoryEntity
 import com.aram.core.database.entity.GoalContributionEntity
 import com.aram.core.database.entity.RecurringRuleEntity
+import com.aram.core.database.entity.SyncOutboxEntity
 import com.aram.core.database.entity.SavingsGoalEntity
 import com.aram.core.database.entity.TransactionEntity
 import com.aram.core.database.entity.UserEntity
@@ -21,6 +24,7 @@ import com.aram.core.datastore.SessionTokenStore
 import com.aram.core.datastore.SyncMetadata
 import com.aram.core.datastore.SyncMetadataStore
 import kotlinx.coroutines.flow.Flow
+import com.aram.core.domain.repository.OutboxTrigger
 import kotlinx.coroutines.flow.MutableStateFlow
 
 class FakeUserDao : UserDao {
@@ -120,6 +124,7 @@ class FakeAccountDao : AccountDao {
 class FakeTransactionDao : TransactionDao {
 
     val rows = linkedMapOf<String, TransactionEntity>()
+    var lastLimit: Int? = null
 
     override suspend fun upsert(transaction: TransactionEntity) {
         rows[transaction.id] = transaction
@@ -178,8 +183,15 @@ class FakeTransactionDao : TransactionDao {
             .sortedByDescending { it.occurredAt },
     )
 
-    override fun observeRecent(userId: String, limit: Int): Flow<List<TransactionEntity>> =
-        MutableStateFlow(rows.values.filter { it.userId == userId && it.deletedAt == null }.take(limit))
+    override fun observeRecent(userId: String, limit: Int): Flow<List<TransactionEntity>> {
+        lastLimit = limit
+        return MutableStateFlow(
+            rows.values
+                .filter { it.userId == userId && it.deletedAt == null }
+                .sortedByDescending { it.occurredAt }
+                .take(limit),
+        )
+    }
 
     override fun observeById(userId: String, id: String): Flow<TransactionEntity?> =
         MutableStateFlow(rows[id]?.takeIf { it.userId == userId && it.deletedAt == null })
@@ -336,5 +348,108 @@ class FakeSyncMetadataStore : SyncMetadataStore {
 
     override suspend fun clear() {
         value = null
+    }
+}
+
+class FakeSyncOutboxDao : SyncOutboxDao {
+
+    val rows = linkedMapOf<String, SyncOutboxEntity>()
+    private val counts = mutableMapOf<String, MutableStateFlow<Int>>()
+
+    override suspend fun insert(entry: SyncOutboxEntity) {
+        rows[entry.id] = entry
+    }
+
+    override suspend fun due(userId: String, now: Long, limit: Int): List<SyncOutboxEntity> =
+        rows.values
+            .filter { it.userId == userId && it.nextAttemptAt <= now }
+            .sortedBy { it.createdAt }
+            .take(limit)
+
+    override suspend fun markAttempt(
+        id: String,
+        attempts: Int,
+        nextAttemptAt: Long,
+        lastError: String?,
+    ) {
+        rows[id] = rows.getValue(id).copy(
+            attempts = attempts,
+            nextAttemptAt = nextAttemptAt,
+            lastError = lastError,
+        )
+    }
+
+    override suspend fun delete(id: String) {
+        rows.remove(id)
+    }
+
+    override suspend fun count(userId: String): Int = rows.values.count { it.userId == userId }
+
+    override fun observeCount(userId: String): Flow<Int> =
+        counts.getOrPut(userId) { MutableStateFlow(0) }
+
+    override suspend fun countDue(userId: String, now: Long): Int =
+        rows.values.count { it.userId == userId && it.nextAttemptAt <= now }
+
+    override suspend fun countFailed(userId: String, attempts: Int): Int =
+        rows.values.count { it.userId == userId && it.attempts >= attempts }
+
+    override fun observeFailed(userId: String, attempts: Int): Flow<Int> =
+        counts.getOrPut(userId) { MutableStateFlow(0) }
+
+    override suspend fun retryAll(userId: String) {
+        rows.replaceAll { id, row ->
+            if (row.userId == userId) row.copy(attempts = 0, nextAttemptAt = 0) else row
+        }
+    }
+
+    override suspend fun deleteForEntity(userId: String, entityId: String) {
+        rows.values.removeAll { it.userId == userId && it.entityId == entityId }
+    }
+
+    override suspend fun markSynced(userId: String, entityId: String) = Unit
+
+    override suspend fun discard(userId: String, entityId: String) {
+        rows.values.removeAll { it.userId == userId && it.entityId == entityId }
+    }
+
+    override suspend fun deleteByUser(userId: String) {
+        rows.values.removeAll { it.userId == userId }
+    }
+}
+
+class FakeLedgerWriteDao(
+    private val transactions: FakeTransactionDao,
+    private val outbox: FakeSyncOutboxDao,
+) : LedgerWriteDao() {
+
+    override suspend fun upsertTransaction(transaction: TransactionEntity) = transactions.upsert(transaction)
+
+    override suspend fun insertOutbox(entry: SyncOutboxEntity) = outbox.insert(entry)
+
+    override suspend fun updateRow(
+        userId: String,
+        id: String,
+        accountId: String,
+        categoryId: String?,
+        type: String,
+        amountMinor: Long,
+        currencyCode: String,
+        occurredAt: Long,
+        note: String?,
+        updatedAt: Long,
+    ): Int = transactions.update(
+        userId, id, accountId, categoryId, type, amountMinor, currencyCode, occurredAt, note, updatedAt,
+    )
+
+    override suspend fun deleteRow(userId: String, id: String, deletedAt: Long): Int =
+        transactions.softDelete(userId, id, deletedAt)
+}
+
+class FakeOutboxTrigger : OutboxTrigger {
+    var scheduled = 0
+
+    override fun schedule(delayMillis: Long) {
+        scheduled++
     }
 }

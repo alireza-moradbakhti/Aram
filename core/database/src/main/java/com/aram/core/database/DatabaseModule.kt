@@ -17,7 +17,7 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AramDatabase =
         Room.databaseBuilder(context, AramDatabase::class.java, AramDatabase.NAME)
-            .addMigrations(AramDatabase.MIGRATION_1_2)
+            .addMigrations(*AramDatabase.MIGRATIONS)
             .build()
 
     @Provides
@@ -40,4 +40,10 @@ object DatabaseModule {
 
     @Provides
     fun provideRecurringRuleDao(database: AramDatabase) = database.recurringRuleDao()
+
+    @Provides
+    fun provideSyncOutboxDao(database: AramDatabase) = database.syncOutboxDao()
+
+    @Provides
+    fun provideLedgerWriteDao(database: AramDatabase) = database.ledgerWriteDao()
 }

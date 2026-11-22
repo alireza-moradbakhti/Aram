@@ -22,6 +22,7 @@ internal fun TransactionEntity.toModel(): Transaction = Transaction(
     note = note,
     transferGroupId = transferGroupId,
     recurringRuleId = recurringRuleId,
+    pendingPush = pendingPush,
 )
 
 internal fun AccountEntity.toModel(): Account = Account(

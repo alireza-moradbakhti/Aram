@@ -34,6 +34,7 @@ internal fun CategoryRefDto.toEntity(userId: String, now: Long, sortOrder: Int):
         createdAt = now,
         updatedAt = now,
         deletedAt = null,
+        slug = slug,
     )
 
 internal fun AccountDto.toEntity(

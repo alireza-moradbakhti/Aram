@@ -2,6 +2,8 @@ package com.aram.feature.transactions.presentation
 
 import com.aram.core.domain.repository.LedgerDirectory
 import com.aram.core.domain.repository.LedgerSync
+import com.aram.core.domain.repository.OutboxSnapshot
+import com.aram.core.domain.repository.OutboxSync
 import com.aram.core.domain.repository.TransactionRepository
 import com.aram.core.domain.transaction.TransactionDraft
 import com.aram.core.model.Account
@@ -42,7 +44,9 @@ class TransactionsViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private val clock: Clock = Clock.fixed(Instant.parse("2026-10-12T12:00:00Z"), ZoneOffset.UTC)
     private val repository = FakeRangeRepository()
-    private val ledgerSync = FakeLedgerSync()
+    private val events = mutableListOf<String>()
+    private val ledgerSync = FakeLedgerSync(events)
+    private val outbox = FakeOutboxSync(events)
     private val directory = FakeDirectory(
         accounts = MutableStateFlow(listOf(cash)),
         categories = MutableStateFlow(listOf(food, transport, salary)),
@@ -58,7 +62,7 @@ class TransactionsViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel() = TransactionsViewModel(repository, directory, ledgerSync, clock)
+    private fun viewModel() = TransactionsViewModel(repository, directory, ledgerSync, outbox, clock)
 
     @Test
     fun `rows group by day newest first with newest rows first`() = runTest(dispatcher) {
@@ -93,11 +97,50 @@ class TransactionsViewModelTest {
         val viewModel = viewModel()
         advanceUntilIdle()
         ledgerSync.refreshes.clear()
+        events.clear()
 
         viewModel.onRefresh()
         advanceUntilIdle()
 
         assertEquals(listOf(YearMonth.of(2026, 10) to true), ledgerSync.refreshes)
+        assertEquals(listOf("flush", "refresh"), events)
+    }
+
+    @Test
+    fun `the queued and failed counts drive the banner state`() = runTest(dispatcher) {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        outbox.snapshot.value = OutboxSnapshot(pending = 3, failed = 1)
+        advanceUntilIdle()
+
+        assertEquals(OutboxSnapshot(pending = 3, failed = 1), viewModel.uiState.value.outbox)
+    }
+
+    @Test
+    fun `retrying queued writes clears failures before pushing`() = runTest(dispatcher) {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        events.clear()
+
+        viewModel.onRetryQueued()
+        advanceUntilIdle()
+
+        assertEquals(1, outbox.retries)
+        assertEquals(1, outbox.flushes)
+        assertEquals(listOf("retry", "flush", "refresh"), events)
+    }
+
+    @Test
+    fun `a locally queued row is marked for sync`() = runTest(dispatcher) {
+        repository.rows.value = listOf(
+            expense("queued", 18_000, "food", "2026-10-12T09:12:00Z").copy(pendingPush = true),
+        )
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        val row = viewModel.uiState.value.groups.single().transactions.single()
+        assertTrue(row.pendingSync)
     }
 
     @Test
@@ -295,13 +338,33 @@ class TransactionsViewModelTest {
         override suspend fun softDelete(id: String): Outcome<Unit> = Outcome.Success(Unit)
     }
 
-    private class FakeLedgerSync : LedgerSync {
+    private class FakeLedgerSync(private val events: MutableList<String>) : LedgerSync {
         override val state = MutableStateFlow(SyncState())
         val refreshes = mutableListOf<Pair<YearMonth, Boolean>>()
 
         override suspend fun refresh(month: YearMonth, force: Boolean) {
             refreshes += month to force
+            events += "refresh"
         }
+    }
+
+    private class FakeOutboxSync(private val events: MutableList<String>) : OutboxSync {
+        override val snapshot = MutableStateFlow(OutboxSnapshot())
+        var flushes = 0
+        var retries = 0
+
+        override suspend fun flush(): Boolean {
+            flushes++
+            events += "flush"
+            return true
+        }
+
+        override suspend fun retryFailed() {
+            retries++
+            events += "retry"
+        }
+
+        override suspend fun discard(entityId: String) = Unit
     }
 
     private companion object {
