@@ -1,5 +1,12 @@
 package com.aram.feature.dashboard.presentation
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,19 +31,27 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aram.core.designsystem.AramTextStyles
 import com.aram.core.designsystem.AramTheme
 import com.aram.core.designsystem.aramColors
@@ -56,17 +71,24 @@ fun DashboardRoute(
     displayName: String,
     modifier: Modifier = Modifier,
     onSeeAll: () -> Unit = {},
+    viewModel: DashboardViewModel = hiltViewModel(),
 ) {
-    DashboardScreen(displayName = displayName, onSeeAll = onSeeAll, modifier = modifier)
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    DashboardScreen(
+        displayName = displayName,
+        isLoading = state.isLoading,
+        onSeeAll = onSeeAll,
+        modifier = modifier,
+    )
 }
 
 @Composable
 fun DashboardScreen(
     displayName: String,
     modifier: Modifier = Modifier,
+    isLoading: Boolean = false,
     onSeeAll: () -> Unit = {},
 ) {
-    val colors = MaterialTheme.aramColors
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -74,10 +96,31 @@ fun DashboardScreen(
             .padding(horizontal = 16.dp)
             .padding(top = 8.dp, bottom = 16.dp),
     ) {
+        Crossfade(
+            targetState = isLoading,
+            animationSpec = tween(durationMillis = 320),
+            label = "dashboard-load",
+        ) { loading ->
+            if (loading) {
+                DashboardSkeleton(modifier = Modifier.testTag(SKELETON_TAG))
+            } else {
+                DashboardContent(displayName = displayName, onSeeAll = onSeeAll)
+            }
+        }
+    }
+}
+
+@Composable
+private fun DashboardContent(
+    displayName: String,
+    onSeeAll: () -> Unit,
+) {
+    val colors = MaterialTheme.aramColors
+    Column(Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 20.dp),
+                .height(76.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Top,
         ) {
@@ -211,6 +254,161 @@ fun DashboardScreen(
         }
     }
 }
+
+@Composable
+private fun DashboardSkeleton(modifier: Modifier = Modifier) {
+    Column(modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(76.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top,
+        ) {
+            Column {
+                SkeletonBlock(
+                    modifier = Modifier
+                        .width(92.dp)
+                        .height(11.dp),
+                    shape = RoundedCornerShape(6.dp),
+                )
+                Spacer(Modifier.height(10.dp))
+                SkeletonBlock(
+                    modifier = Modifier
+                        .width(128.dp)
+                        .height(22.dp),
+                    shape = RoundedCornerShape(7.dp),
+                )
+            }
+            SkeletonBlock(modifier = Modifier.size(40.dp), shape = CircleShape)
+        }
+
+        SkeletonBlock(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(188.dp),
+            shape = RoundedCornerShape(28.dp),
+        )
+
+        Spacer(Modifier.height(16.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            repeat(2) {
+                SkeletonBlock(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(100.dp),
+                    shape = RoundedCornerShape(18.dp),
+                )
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            repeat(4) {
+                SkeletonBlock(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(66.dp),
+                    shape = RoundedCornerShape(14.dp),
+                )
+            }
+        }
+
+        SkeletonSectionHeader(extraTop = 8.dp, widthFraction = 0.34f)
+        SkeletonBlock(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(116.dp),
+            shape = RoundedCornerShape(22.dp),
+        )
+        SkeletonSectionHeader(widthFraction = 0.28f)
+        SkeletonBlock(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(214.dp),
+            shape = RoundedCornerShape(22.dp),
+        )
+    }
+}
+
+@Composable
+private fun SkeletonSectionHeader(
+    extraTop: Dp = 0.dp,
+    widthFraction: Float,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 24.dp + extraTop, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SkeletonBlock(
+            modifier = Modifier
+                .fillMaxWidth(widthFraction)
+                .height(24.dp),
+            shape = RoundedCornerShape(7.dp),
+        )
+    }
+}
+
+@Composable
+private fun SkeletonBlock(
+    modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(10.dp),
+) {
+    val colors = MaterialTheme.aramColors
+    Box(
+        modifier
+            .clip(shape)
+            .background(colors.surface1)
+            .border(1.dp, colors.border, shape)
+            .shimmerBand(),
+    )
+}
+
+@Composable
+private fun Modifier.shimmerBand(): Modifier {
+    // Keyed to the theme, not the system setting: AramTheme can force either
+    // scheme (settings override, previews, screenshot tests).
+    val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val highlight = if (darkTheme) {
+        Color.White.copy(alpha = 0.09f)
+    } else {
+        Color.Black.copy(alpha = 0.045f)
+    }
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val progress by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1300, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "shimmerProgress",
+    )
+    return drawWithContent {
+        drawContent()
+        val bandWidth = size.width * 0.55f
+        val startX = -bandWidth + (size.width + bandWidth) * progress
+        drawRect(
+            brush = Brush.horizontalGradient(
+                colors = listOf(Color.Transparent, highlight, Color.Transparent),
+                startX = startX,
+                endX = startX + bandWidth,
+            ),
+        )
+    }
+}
+
+internal const val SKELETON_TAG = "dashboard-skeleton"
 
 @Composable
 private fun SafeToSpendHero() {
@@ -519,5 +717,21 @@ private fun WeekChart() {
 private fun DashboardScreenPreview() {
     AramTheme {
         DashboardScreen(displayName = "Aram")
+    }
+}
+
+@Preview(name = "Loading · light", showBackground = true, showSystemUi = true)
+@Composable
+private fun DashboardSkeletonLightPreview() {
+    AramTheme(darkTheme = false) {
+        DashboardScreen(displayName = "Aram", isLoading = true)
+    }
+}
+
+@Preview(name = "Loading · dark", showBackground = true, showSystemUi = true)
+@Composable
+private fun DashboardSkeletonDarkPreview() {
+    AramTheme(darkTheme = true) {
+        DashboardScreen(displayName = "Aram", isLoading = true)
     }
 }
