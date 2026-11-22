@@ -77,3 +77,14 @@ Backend: `Desktop/Project/Root/Aram-Api/src/Aram.Api/Features/Auth/AuthEndpoints
 - PR #66 (base `feat/AR-039-mock-api-fixtures`) — CI "Alpha build & test" pass.
   CI previously skipped stacked PRs because `ci.yml` only triggered for
   `main`/`dev`; the trigger now covers feature/fix/chore/docs/test bases.
+- Device sheet on emulator-5554 (Android 16), stacked integration build:
+  - Signed out to a local profile, then signed in as `demo@aram.app` — session
+    restored, header switched from "Local profile" to the account name, ledger
+    pulled from the mock backend (13 entries).
+  - Signed-in add of 250,000 IRR — `POST /api/sync/push` 200, queued counter
+    cleared.
+  - Fix found on device: new profiles were created with `USD`
+    (`DefaultData.DEFAULT_CURRENCY`); changed to `IRR` so the add sheet shows
+    "Cash · IRR". Re-verified on device.
+- Rebuild after the fix: `:app:assembleAlphaDebug test -PbuildDate=20261122` —
+  pass.
