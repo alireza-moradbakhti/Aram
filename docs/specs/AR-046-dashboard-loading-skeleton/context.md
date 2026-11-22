@@ -61,4 +61,12 @@
   `./gradlew :app:assembleAlphaDebug test -PbuildDate=20261122 --stacktrace`
   — BUILD SUCCESSFUL in 2m 7s, 535 tasks (`app-alpha-debug.apk` packaged).
 - 2026-11-22 — CI "Alpha build & test" on PR #71 — pass (3m 25s).
-- Device pass (Galaxy A53) — pending batched on-phone sheet.
+- Device sheet on emulator-5554 (Android 16), stacked integration build:
+  - Skeleton appears on cold start and swaps to content; dark-mode and
+    landscape renders look correct.
+  - Fix found on device: the bottom content padding (16dp) ended under the FAB,
+    so the Recent card's amounts were covered when scrolled to the end. Padding
+    is now 96dp, matching the design's `nav-clear` space. Re-verified on device:
+    the last card scrolls clear of the FAB.
+  - Known cosmetic note: in landscape the FAB overlaps the hero balance; not
+    changed, since the design source is portrait-first.
