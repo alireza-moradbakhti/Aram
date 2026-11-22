@@ -6,10 +6,12 @@ import com.aram.core.database.dao.AccountDao
 import com.aram.core.database.dao.CategoryDao
 import com.aram.core.database.dao.TransactionDao
 import com.aram.core.database.dao.UserDao
+import com.aram.core.database.entity.TransactionEntity
 import com.aram.core.datastore.SessionStore
 import com.aram.core.datastore.SyncMetadata
 import com.aram.core.datastore.SyncMetadataStore
 import com.aram.core.domain.repository.LedgerSync
+import com.aram.core.domain.repository.OutboxSync
 import com.aram.core.logging.Logger
 import com.aram.core.model.SyncState
 import com.aram.core.model.SyncStatus
@@ -20,6 +22,7 @@ import com.aram.core.network.config.ApiPaths
 import com.aram.core.network.config.EndpointProvider
 import com.aram.core.network.dto.AccountDto
 import com.aram.core.network.dto.CategoryRefDto
+import com.aram.core.network.dto.SyncPullDto
 import com.aram.core.network.dto.TransactionDto
 import com.aram.core.network.dto.TransactionListDto
 import com.aram.core.network.http.TokenProvider
@@ -41,10 +44,11 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
- * Cache-first ledger refresh: pulls one UTC month plus the category/account
- * references it needs, merges into Room with last-write-wins, and tombstones
- * rows the server no longer returns. The API hard-deletes, so a complete page
- * sweep of the month is the only tombstone signal.
+ * Cache-first ledger refresh: drains queued writes, pulls changes since the
+ * stored cursor, then pulls one UTC month plus the category/account references
+ * it needs. Merges into Room with last-write-wins and tombstones rows the
+ * server no longer returns. The API hard-deletes, so a complete page sweep of
+ * the month is the only tombstone signal.
  */
 @Singleton
 class LedgerSyncRepositoryImpl @Inject constructor(
@@ -57,6 +61,7 @@ class LedgerSyncRepositoryImpl @Inject constructor(
     private val categoryDao: CategoryDao,
     private val userDao: UserDao,
     private val syncMetadata: SyncMetadataStore,
+    private val outboxSync: OutboxSync,
     private val dispatchers: CoroutineDispatchers,
     private val logger: Logger,
     private val clock: Clock,
@@ -68,19 +73,24 @@ class LedgerSyncRepositoryImpl @Inject constructor(
     private val mutex = Mutex()
 
     override suspend fun refresh(month: YearMonth, force: Boolean) {
-        try {
-            mutex.withLock { refreshLocked(month, force) }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Throwable) {
-            logger.e(COMPONENT, "Ledger refresh crashed", e)
-            _state.value = SyncState(SyncStatus.FAILED, syncMetadata.read()?.lastSyncedAtMillis)
-        }
+        runSync(month, force)
     }
 
-    private suspend fun refreshLocked(month: YearMonth, force: Boolean) {
-        val userId = session.userId.first() ?: return
-        if (tokenProvider.accessToken() == null) return
+    override suspend fun syncNow(): Boolean = runSync(YearMonth.now(clock), force = true)
+
+    private suspend fun runSync(month: YearMonth, force: Boolean): Boolean = try {
+        mutex.withLock { refreshLocked(month, force) }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Throwable) {
+        logger.e(COMPONENT, "Ledger refresh crashed", e)
+        _state.value = SyncState(SyncStatus.FAILED, syncMetadata.read()?.lastSyncedAtMillis)
+        false
+    }
+
+    private suspend fun refreshLocked(month: YearMonth, force: Boolean): Boolean {
+        val userId = session.userId.first() ?: return true
+        if (tokenProvider.accessToken() == null) return true
 
         val stored = syncMetadata.read()
         val now = clock.millis()
@@ -88,19 +98,22 @@ class LedgerSyncRepositoryImpl @Inject constructor(
             now - stored.lastSyncedAtMillis in 0 until STALE_AFTER_MILLIS
         if (!force && recentlySynced) {
             _state.value = SyncState(SyncStatus.IDLE, stored.lastSyncedAtMillis)
-            return
+            return true
         }
 
         _state.value = SyncState(SyncStatus.REFRESHING, stored?.lastSyncedAtMillis)
-        when (val result = pull(userId, month)) {
+        outboxSync.flush()
+        return when (val result = pull(userId, month, stored?.cursor)) {
             is ApiResult.Success -> {
                 val stamp = clock.millis()
-                syncMetadata.write(SyncMetadata(stamp, month.toString()))
+                syncMetadata.write(SyncMetadata(stamp, month.toString(), result.data))
                 _state.value = SyncState(SyncStatus.IDLE, stamp)
+                true
             }
             is ApiResult.Failure -> {
                 logger.w(COMPONENT, "Ledger refresh failed: ${result.error::class.simpleName}")
                 _state.value = SyncState(statusFor(result.error), stored?.lastSyncedAtMillis)
+                false
             }
         }
     }
@@ -112,7 +125,11 @@ class LedgerSyncRepositoryImpl @Inject constructor(
         else -> SyncStatus.STALE
     }
 
-    private suspend fun pull(userId: String, month: YearMonth): ApiResult<Unit> =
+    private suspend fun pull(
+        userId: String,
+        month: YearMonth,
+        cursor: String?,
+    ): ApiResult<String?> =
         withContext(dispatchers.io) {
             val startedAt = clock.millis()
 
@@ -139,6 +156,27 @@ class LedgerSyncRepositoryImpl @Inject constructor(
                 is ApiResult.Failure -> return@withContext result
                 is ApiResult.Success -> result.data
             }
+
+            val delta = when (
+                val result = safeApiCall<SyncPullDto>(
+                    client = client,
+                    logger = logger,
+                    method = HttpMethod.Get,
+                    url = endpoints.url(ApiPaths.SYNC_PULL),
+                    configure = { if (cursor != null) parameter("since", cursor) },
+                )
+            ) {
+                is ApiResult.Failure -> return@withContext result
+                is ApiResult.Success -> result.data
+            }
+            upsertPreservingLocal(
+                userId = userId,
+                incoming = delta.transactions.mapNotNull { dto -> dto.toEntity(userId, startedAt) },
+                startedAt = startedAt,
+            )
+            // The API caps a pull at 500 rows with no paging, so a full page is
+            // treated as partial and the old cursor stays put.
+            val nextCursor = if (delta.transactions.size < CURSOR_PULL_CAP) delta.serverTime else cursor
 
             val rows = mutableListOf<TransactionDto>()
             var page = 1
@@ -174,7 +212,7 @@ class LedgerSyncRepositoryImpl @Inject constructor(
                 complete = page > totalPages,
                 startedAt = startedAt,
             )
-            ApiResult.Success(Unit)
+            ApiResult.Success(nextCursor)
         }
 
     private suspend fun applyPull(
@@ -202,14 +240,7 @@ class LedgerSyncRepositoryImpl @Inject constructor(
         }
 
         val incoming = rows.mapNotNull { dto -> dto.toEntity(userId, startedAt) }
-        val existing = transactionDao
-            .findByIds(userId, incoming.map { it.id })
-            .associateBy { it.id }
-        val localWins = existing.values
-            .filter { it.pendingPush || it.updatedAt > startedAt }
-            .map { it.id }
-            .toSet()
-        transactionDao.upsertAll(incoming.filter { it.id !in localWins })
+        upsertPreservingLocal(userId, incoming, startedAt)
 
         if (!complete) return
 
@@ -227,6 +258,23 @@ class LedgerSyncRepositoryImpl @Inject constructor(
         }
     }
 
+    /** An unflushed or just-written local row wins over the pulled copy. */
+    private suspend fun upsertPreservingLocal(
+        userId: String,
+        incoming: List<TransactionEntity>,
+        startedAt: Long,
+    ) {
+        if (incoming.isEmpty()) return
+        val existing = transactionDao
+            .findByIds(userId, incoming.map { it.id })
+            .associateBy { it.id }
+        val localWins = existing.values
+            .filter { it.pendingPush || it.updatedAt > startedAt }
+            .map { it.id }
+            .toSet()
+        transactionDao.upsertAll(incoming.filter { it.id !in localWins })
+    }
+
     private fun utcMonthWindow(month: YearMonth): Pair<Long, Long> {
         val start = month.atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
         val end = month.plusMonths(1).atDay(1)
@@ -238,6 +286,7 @@ class LedgerSyncRepositoryImpl @Inject constructor(
         const val COMPONENT = "LedgerSync"
         const val PAGE_SIZE = 100
         const val MAX_PAGES = 5
+        const val CURSOR_PULL_CAP = 500
         const val STALE_AFTER_MILLIS = 15L * 60L * 1000L
         const val DEFAULT_CURRENCY = "IRR"
     }
