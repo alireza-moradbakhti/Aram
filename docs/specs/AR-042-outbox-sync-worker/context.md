@@ -56,6 +56,14 @@
 
 - `./gradlew :core:data:testDebugUnitTest :feature:transactions:testDebugUnitTest`
   — pass (2026-11-22).
-- `OutboxSyncImplTest` — 8 tests, all green.
+- `:app:assembleAlphaDebug test -PbuildDate=20261122` — pass.
+- OutboxSyncImplTest — 9 tests, all green (added the local-profile case below).
 - Room schema `3.json` exported (sync_outbox + categories.slug present).
-- Pending: full `:app:assembleAlphaDebug test -PbuildDate=...` in this session.
+- Device sheet on emulator-5554 (Android 16), stacked integration build:
+  - Offline add of 90,000 IRR showed the queued banner; reconnecting pushed it
+    (`POST /api/sync/push` 200) and cleared the banner automatically.
+  - Fix found on device: with a local profile (user id, no token) `flush()`
+    returned false, so `SyncOutboxWorker` retried forever (RETRY loop in
+    logcat). It now returns true and leaves the queue intact until sign-in;
+    covered by `a local profile without a token settles instead of retrying
+    forever`. Re-verified on device: worker finishes SUCCESS.
