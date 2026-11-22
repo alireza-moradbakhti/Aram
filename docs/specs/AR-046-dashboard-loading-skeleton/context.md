@@ -60,4 +60,5 @@
 - 2026-11-22 — Full CI-equivalent build:
   `./gradlew :app:assembleAlphaDebug test -PbuildDate=20261122 --stacktrace`
   — BUILD SUCCESSFUL in 2m 7s, 535 tasks (`app-alpha-debug.apk` packaged).
+- 2026-11-22 — CI "Alpha build & test" on PR #71 — pass (3m 25s).
 - Device pass (Galaxy A53) — pending batched on-phone sheet.
