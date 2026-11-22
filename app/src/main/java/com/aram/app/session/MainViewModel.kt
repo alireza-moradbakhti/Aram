@@ -2,6 +2,7 @@ package com.aram.app.session
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.aram.core.data.sync.SyncScheduler
 import com.aram.core.designsystem.state.UiState
 import com.aram.core.domain.repository.AuthRepository
 import com.aram.core.model.Outcome
@@ -21,6 +22,7 @@ import kotlinx.coroutines.launch
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val authRepository: AuthRepository,
+    private val syncScheduler: SyncScheduler,
 ) : ViewModel() {
 
     private val retryTrigger = MutableStateFlow(0)
@@ -43,6 +45,23 @@ class MainViewModel @Inject constructor(
             started = SharingStarted.Eagerly,
             initialValue = UiState.Loading,
         )
+
+    init {
+        // The app syncs once at cold start with whatever token exists; a later
+        // sign-in must pull the account's ledger without waiting for a restart.
+        viewModelScope.launch {
+            var previous: UiState<UserProfile> = UiState.Loading
+            session.collect { state ->
+                if (state is UiState.Content) {
+                    val previousId = (previous as? UiState.Content)?.data?.id
+                    val sessionChanged = previous is UiState.Empty ||
+                        (previousId != null && previousId != state.data.id)
+                    if (sessionChanged) syncScheduler.syncNow()
+                }
+                previous = state
+            }
+        }
+    }
 
     fun retry() {
         retryTrigger.update { it + 1 }

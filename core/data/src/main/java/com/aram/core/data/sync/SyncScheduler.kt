@@ -16,18 +16,26 @@ import javax.inject.Singleton
 
 /**
  * Owns the background cadence: a 15-minute pull while the app is alive in the
- * background, plus a one-shot on app start and after a manual "Sync now".
+ * background, plus a one-shot on app start, after sign-in and after a manual
+ * "Sync now".
  */
+interface SyncScheduler {
+
+    fun schedulePeriodic()
+
+    fun syncNow()
+}
+
 @Singleton
-class SyncScheduler @Inject constructor(
+class WorkManagerSyncScheduler @Inject constructor(
     @ApplicationContext private val context: Context,
-) {
+) : SyncScheduler {
 
     private val constraints = Constraints.Builder()
         .setRequiredNetworkType(NetworkType.CONNECTED)
         .build()
 
-    fun schedulePeriodic() {
+    override fun schedulePeriodic() {
         val request = PeriodicWorkRequestBuilder<LedgerSyncWorker>(REFRESH_MINUTES, TimeUnit.MINUTES)
             .setConstraints(constraints)
             .build()
@@ -38,7 +46,7 @@ class SyncScheduler @Inject constructor(
         )
     }
 
-    fun syncNow() {
+    override fun syncNow() {
         val request = OneTimeWorkRequestBuilder<LedgerSyncWorker>()
             .setConstraints(constraints)
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
