@@ -46,4 +46,12 @@
 - `:core:data:test` — 30 tests pass; new `LedgerSyncRepositoryImplTest` (9
   cases).
 - `:feature:transactions:test` — passes with the new LedgerSync fake.
-- Device smoke deferred to the sprint test batch.
+- Device sheet on emulator-5554 (Android 16), stacked integration build:
+  - Local profile dashboard rendered cached rows in IRR; pull-to-refresh and the
+    settings "Sync now" action both reached `GET /api/transactions` and updated
+    the list.
+  - Offline start with airplane mode: cached rows stayed visible, sync banner
+    shown, no crash.
+- No fixes were needed in this module; the device-sheet fixes landed in AR-040
+  (currency), AR-042 (outbox retry), AR-043 (post-sign-in pull) and AR-046
+  (dashboard padding).
