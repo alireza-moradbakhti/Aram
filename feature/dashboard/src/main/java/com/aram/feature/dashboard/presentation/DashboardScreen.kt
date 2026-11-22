@@ -94,7 +94,7 @@ fun DashboardScreen(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp)
-            .padding(top = 8.dp, bottom = 16.dp),
+            .padding(top = 8.dp, bottom = 96.dp),
     ) {
         Crossfade(
             targetState = isLoading,
