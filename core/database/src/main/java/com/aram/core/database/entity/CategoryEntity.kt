@@ -24,4 +24,6 @@ data class CategoryEntity(
     val createdAt: Long,
     val updatedAt: Long,
     val deletedAt: Long?,
+    /** Server catalog slug used by /sync/push; null for local-only rows. */
+    val slug: String? = null,
 )

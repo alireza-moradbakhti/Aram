@@ -1,11 +1,18 @@
 package com.aram.core.data.repository
 
 import com.aram.core.common.CoroutineDispatchers
+import com.aram.core.data.FakeAccountDao
+import com.aram.core.data.FakeCategoryDao
+import com.aram.core.data.FakeLedgerWriteDao
+import com.aram.core.data.FakeOutboxTrigger
+import com.aram.core.data.FakeSyncOutboxDao
+import com.aram.core.data.FakeTransactionDao
 import com.aram.core.database.dao.AccountDao
 import com.aram.core.database.dao.CategoryDao
 import com.aram.core.database.dao.TransactionDao
 import com.aram.core.database.entity.AccountEntity
 import com.aram.core.database.entity.CategoryEntity
+import com.aram.core.database.entity.SyncOutboxEntity
 import com.aram.core.database.entity.TransactionEntity
 import com.aram.core.datastore.SessionStore
 import com.aram.core.domain.transaction.TransactionDraft
@@ -33,10 +40,14 @@ class TransactionRepositoryImplTest {
     private val accountDao = FakeAccountDao()
     private val categoryDao = FakeCategoryDao()
     private val session = FakeSessionStore()
+    private val outbox = FakeSyncOutboxDao()
+    private val trigger = FakeOutboxTrigger()
     private val repository = TransactionRepositoryImpl(
         transactionDao = transactionDao,
         accountDao = accountDao,
         categoryDao = categoryDao,
+        writeDao = FakeLedgerWriteDao(transactionDao, outbox),
+        outboxTrigger = trigger,
         session = session,
         dispatchers = TestDispatchers,
         logger = Logger(),
@@ -56,6 +67,39 @@ class TransactionRepositoryImplTest {
         assertNull(row.deletedAt)
         assertTrue(row.createdAt >= before)
         assertEquals(row.createdAt, row.updatedAt)
+    }
+
+    @Test
+    fun `create queues a push and schedules the worker`() = runTest {
+        val id = (repository.create(draft()) as Outcome.Success).value.id
+
+        val entry = outbox.rows.values.single()
+        assertEquals(SyncOutboxEntity.OP_CREATE, entry.op)
+        assertEquals(id, entry.entityId)
+        assertTrue(entry.payload?.contains(id) == true)
+        assertEquals(1, trigger.scheduled)
+    }
+
+    @Test
+    fun `update and delete queue their own operations`() = runTest {
+        val id = (repository.create(draft()) as Outcome.Success).value.id
+
+        repository.update(id, draft(amountMinor = 2_000L))
+        repository.softDelete(id)
+
+        assertEquals(
+            listOf(SyncOutboxEntity.OP_CREATE, SyncOutboxEntity.OP_UPDATE, SyncOutboxEntity.OP_DELETE),
+            outbox.rows.values.map { it.op },
+        )
+        assertEquals(3, trigger.scheduled)
+    }
+
+    @Test
+    fun `failed writes do not queue anything`() = runTest {
+        repository.update("missing", draft())
+
+        assertTrue(outbox.rows.isEmpty())
+        assertEquals(0, trigger.scheduled)
     }
 
     @Test
@@ -239,152 +283,4 @@ private class FakeSessionStore : SessionStore {
     override suspend fun clear() {
         userId.value = null
     }
-}
-
-private class FakeTransactionDao : TransactionDao {
-    val rows = linkedMapOf<String, TransactionEntity>()
-    var lastLimit: Int? = null
-
-    override suspend fun upsert(transaction: TransactionEntity) {
-        rows[transaction.id] = transaction
-    }
-
-    override suspend fun upsertAll(transactions: List<TransactionEntity>) {
-        transactions.forEach { rows[it.id] = it }
-    }
-
-    override suspend fun findByIds(userId: String, ids: List<String>): List<TransactionEntity> =
-        rows.values.filter { it.userId == userId && it.id in ids }
-
-    override suspend fun softDeleteMissing(
-        userId: String,
-        fromInclusive: Long,
-        toExclusive: Long,
-        keepIds: List<String>,
-        deletedAt: Long,
-    ): Int = 0
-
-    override suspend fun softDeleteAllInRange(
-        userId: String,
-        fromInclusive: Long,
-        toExclusive: Long,
-        deletedAt: Long,
-    ): Int = 0
-
-    override fun observeRange(
-        userId: String,
-        fromInclusive: Long,
-        toExclusive: Long,
-    ): Flow<List<TransactionEntity>> = flowOf(
-        rows.values
-            .filter { it.userId == userId && it.deletedAt == null && it.occurredAt in fromInclusive until toExclusive }
-            .sortedByDescending { it.occurredAt },
-    )
-
-    override fun observeRecent(userId: String, limit: Int): Flow<List<TransactionEntity>> {
-        lastLimit = limit
-        return flowOf(
-            rows.values
-                .filter { it.userId == userId && it.deletedAt == null }
-                .sortedByDescending { it.occurredAt }
-                .take(limit),
-        )
-    }
-
-    override fun observeById(userId: String, id: String): Flow<TransactionEntity?> =
-        flowOf(rows[id]?.takeIf { it.userId == userId && it.deletedAt == null })
-
-    override suspend fun findById(userId: String, id: String): TransactionEntity? =
-        rows[id]?.takeIf { it.userId == userId && it.deletedAt == null }
-
-    override suspend fun update(
-        userId: String,
-        id: String,
-        accountId: String,
-        categoryId: String?,
-        type: String,
-        amountMinor: Long,
-        currencyCode: String,
-        occurredAt: Long,
-        note: String?,
-        updatedAt: Long,
-    ): Int {
-        val current = rows[id] ?: return 0
-        if (current.userId != userId || current.deletedAt != null) return 0
-        rows[id] = current.copy(
-            accountId = accountId,
-            categoryId = categoryId,
-            type = type,
-            amountMinor = amountMinor,
-            currencyCode = currencyCode,
-            occurredAt = occurredAt,
-            note = note,
-            updatedAt = updatedAt,
-        )
-        return 1
-    }
-
-    override suspend fun softDelete(userId: String, id: String, deletedAt: Long): Int {
-        val current = rows[id] ?: return 0
-        if (current.userId != userId || current.deletedAt != null) return 0
-        rows[id] = current.copy(deletedAt = deletedAt, updatedAt = deletedAt)
-        return 1
-    }
-
-    override fun observeTotal(
-        userId: String,
-        type: String,
-        fromInclusive: Long,
-        toExclusive: Long,
-    ): Flow<Long> = flowOf(0L)
-
-    override suspend fun deleteByUser(userId: String) {
-        rows.entries.removeAll { it.value.userId == userId }
-    }
-}
-
-private class FakeAccountDao : AccountDao {
-    val rows = mutableMapOf<String, AccountEntity>()
-
-    override suspend fun upsertAll(accounts: List<AccountEntity>) {
-        accounts.forEach { rows[it.id] = it }
-    }
-
-    override fun observeByUser(userId: String): Flow<List<AccountEntity>> =
-        flowOf(rows.values.filter { it.userId == userId && it.deletedAt == null })
-
-    override suspend fun findById(userId: String, id: String): AccountEntity? =
-        rows[id]?.takeIf { it.userId == userId && it.deletedAt == null }
-
-    override suspend fun countByUser(userId: String): Int =
-        rows.values.count { it.userId == userId && it.deletedAt == null }
-
-    override suspend fun deleteByUser(userId: String) {
-        rows.entries.removeAll { it.value.userId == userId }
-    }
-
-    override suspend fun softDeleteOrphans(userId: String, keepIds: List<String>, deletedAt: Long): Int = 0
-}
-
-private class FakeCategoryDao : CategoryDao {
-    val rows = mutableMapOf<String, CategoryEntity>()
-
-    override suspend fun upsertAll(categories: List<CategoryEntity>) {
-        categories.forEach { rows[it.id] = it }
-    }
-
-    override fun observeByUser(userId: String): Flow<List<CategoryEntity>> =
-        flowOf(rows.values.filter { it.userId == userId && it.deletedAt == null })
-
-    override suspend fun findById(userId: String, id: String): CategoryEntity? =
-        rows[id]?.takeIf { it.userId == userId && it.deletedAt == null }
-
-    override suspend fun countByUser(userId: String): Int =
-        rows.values.count { it.userId == userId && it.deletedAt == null }
-
-    override suspend fun deleteByUser(userId: String) {
-        rows.entries.removeAll { it.value.userId == userId }
-    }
-
-    override suspend fun softDeleteOrphans(userId: String, keepIds: List<String>, deletedAt: Long): Int = 0
 }

@@ -59,6 +59,18 @@ val verifyNoNotNullAssertions by tasks.registering {
 }
 
 subprojects {
+    // androidx.hilt:hilt-compiler 1.4.0 asks for room-compiler-processing
+    // 2.8.4, which the configured mirrors do not serve; Room is 2.8.5 here.
+    // Hilt's processors and WorkManager pin older androidx artifacts that the
+    // configured mirrors do not serve; keep them on the versions the app uses.
+    configurations.configureEach {
+        resolutionStrategy.force(
+            "androidx.room:room-compiler-processing:2.8.5",
+            "androidx.core:core:1.19.1",
+            "androidx.core:core-ktx:1.19.1",
+            "androidx.profileinstaller:profileinstaller:1.4.1",
+        )
+    }
     tasks.withType<Test>().configureEach {
         dependsOn(verifyNoNotNullAssertions)
     }
