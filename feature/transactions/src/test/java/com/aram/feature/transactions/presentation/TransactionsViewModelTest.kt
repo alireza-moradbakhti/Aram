@@ -346,6 +346,11 @@ class TransactionsViewModelTest {
             refreshes += month to force
             events += "refresh"
         }
+
+        override suspend fun syncNow(): Boolean {
+            events += "syncNow"
+            return true
+        }
     }
 
     private class FakeOutboxSync(private val events: MutableList<String>) : OutboxSync {

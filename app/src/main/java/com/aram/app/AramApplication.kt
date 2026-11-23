@@ -5,6 +5,7 @@ import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.aram.app.crash.AramCrashHandler
 import com.aram.app.crash.CrashMarker
+import com.aram.core.data.sync.SyncScheduler
 import com.aram.core.domain.repository.OutboxTrigger
 import com.aram.core.logging.Logger
 import dagger.hilt.android.HiltAndroidApp
@@ -22,6 +23,9 @@ class AramApplication : Application(), Configuration.Provider {
     @Inject
     lateinit var outboxTrigger: OutboxTrigger
 
+    @Inject
+    lateinit var syncScheduler: SyncScheduler
+
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setWorkerFactory(workerFactory)
@@ -32,6 +36,8 @@ class AramApplication : Application(), Configuration.Provider {
         super.onCreate()
         installCrashHandler()
         outboxTrigger.schedule()
+        syncScheduler.schedulePeriodic()
+        syncScheduler.syncNow()
         logger.i(
             "AramApplication",
             "Started ${BuildConfig.BUILD_STAGE} ${BuildConfig.VERSION_NAME} (${BuildConfig.BUILD_DATE})",

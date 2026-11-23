@@ -37,7 +37,7 @@ import com.aram.feature.dashboard.presentation.DashboardRoute
 import com.aram.feature.onboarding.presentation.DemoCredentials
 import com.aram.feature.onboarding.presentation.WelcomeRoute
 import com.aram.feature.settings.presentation.DebugScenarioOption
-import com.aram.feature.settings.presentation.SettingsScreen
+import com.aram.feature.settings.presentation.SettingsRoute
 import com.aram.feature.transactions.presentation.AddTransactionRoute
 import com.aram.feature.transactions.presentation.TransactionsRoute
 import kotlinx.coroutines.launch
@@ -182,7 +182,7 @@ private fun MainScaffold(
                     BudgetsScreen()
                 }
                 composable(MainTab.Profile.route) {
-                    SettingsScreen(
+                    SettingsRoute(
                         displayName = profile.displayName,
                         showDebugActions = showDebugActions,
                         debugScenarios = if (debugScenario == null) {

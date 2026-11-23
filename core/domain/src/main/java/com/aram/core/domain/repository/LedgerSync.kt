@@ -19,4 +19,11 @@ interface LedgerSync {
      * synced less than 15 minutes ago unless [force] is set.
      */
     suspend fun refresh(month: YearMonth, force: Boolean = false)
+
+    /**
+     * Push-first full sync: drains the outbox, pulls changes since the stored
+     * cursor, then refreshes the current month. Returns false when the pull
+     * failed so background work can retry.
+     */
+    suspend fun syncNow(): Boolean
 }

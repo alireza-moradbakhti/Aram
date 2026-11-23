@@ -1,9 +1,10 @@
 package com.aram.core.datastore
 
-/** The last successful refresh and which ledger month it covered. */
+/** The last successful refresh, the month it covered and the pull cursor. */
 data class SyncMetadata(
     val lastSyncedAtMillis: Long,
     val month: String,
+    val cursor: String? = null,
 )
 
 interface SyncMetadataStore {

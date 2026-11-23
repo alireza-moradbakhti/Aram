@@ -27,13 +27,23 @@ class SyncMetadataDataStore @Inject constructor(
         val preferences = dataStore.data.first()
         val lastSyncedAt = preferences[Keys.LastSyncedAt] ?: return null
         val month = preferences[Keys.Month] ?: return null
-        return SyncMetadata(lastSyncedAtMillis = lastSyncedAt, month = month)
+        return SyncMetadata(
+            lastSyncedAtMillis = lastSyncedAt,
+            month = month,
+            cursor = preferences[Keys.Cursor],
+        )
     }
 
     override suspend fun write(metadata: SyncMetadata) {
         dataStore.edit { preferences ->
             preferences[Keys.LastSyncedAt] = metadata.lastSyncedAtMillis
             preferences[Keys.Month] = metadata.month
+            val cursor = metadata.cursor
+            if (cursor == null) {
+                preferences.remove(Keys.Cursor)
+            } else {
+                preferences[Keys.Cursor] = cursor
+            }
         }
     }
 
@@ -44,5 +54,6 @@ class SyncMetadataDataStore @Inject constructor(
     private object Keys {
         val LastSyncedAt = longPreferencesKey("last_synced_at")
         val Month = stringPreferencesKey("last_synced_month")
+        val Cursor = stringPreferencesKey("sync_cursor")
     }
 }
