@@ -4,10 +4,12 @@ import com.aram.core.network.api.ApiError
 import com.aram.core.network.api.ApiResult
 import com.aram.core.network.api.RetryPolicy
 import com.aram.core.network.api.safeApiCall
+import com.aram.core.network.api.safeApiCallBare
 import com.aram.core.network.api.safeApiCallNoContent
 import com.aram.core.network.config.ApiPaths
 import com.aram.core.network.config.EndpointProvider
-import com.aram.core.network.dto.UserDto
+import com.aram.core.network.dto.HealthCheckDto
+import com.aram.core.network.dto.ProfileDto
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.request.setBody
@@ -32,28 +34,51 @@ class SafeApiCallTest {
 
     private fun meUrl() = endpoints.url(ApiPaths.ME)
 
+    private val profileJson = """
+        {
+          "id": "u1", "displayName": "Ava", "firstName": "Ava",
+          "email": "demo@aram.app", "avatarInitials": "AV", "homeCurrency": "IRR"
+        }
+    """.trimIndent()
+
+    private fun successBody(data: String) = """{"isSuccess":true,"message":"","errors":[],"data":$data}"""
+
     @Test
-    fun `success parses data and meta`() = runTest {
+    fun `success unwraps the data field`() = runTest {
+        val engine = MockEngine {
+            respond(successBody(profileJson), HttpStatusCode.OK, jsonHeaders())
+        }
+        val result = safeApiCall<ProfileDto>(clientFor(engine), logger, HttpMethod.Get, meUrl())
+        assertEquals("u1", (result as ApiResult.Success).data.id)
+    }
+
+    @Test
+    fun `isSuccess false becomes a server failure with the api message`() = runTest {
         val engine = MockEngine {
             respond(
-                content = """{"data":{"id":"u1","email":"demo@aram.app"},"meta":{"server_time":99}}""",
-                status = HttpStatusCode.OK,
-                headers = jsonHeaders(),
+                """{"isSuccess":false,"message":"That email is already registered.","errors":[],"data":null}""",
+                HttpStatusCode.OK,
+                jsonHeaders(),
             )
         }
-        val result = safeApiCall<UserDto>(
-            clientFor(engine), logger, HttpMethod.Get, meUrl(),
-        )
-        val success = result as ApiResult.Success
-        assertEquals("u1", success.data.id)
-        assertEquals(99L, success.meta?.serverTime)
+        val error = (safeApiCall<ProfileDto>(clientFor(engine), logger, HttpMethod.Get, meUrl()) as ApiResult.Failure).error
+        assertEquals(ApiError.Server(null, "That email is already registered."), error)
+    }
+
+    @Test
+    fun `success without data becomes unknown`() = runTest {
+        val engine = MockEngine {
+            respond("""{"isSuccess":true,"message":"","errors":[],"data":null}""", HttpStatusCode.OK, jsonHeaders())
+        }
+        val result = safeApiCall<ProfileDto>(clientFor(engine), logger, HttpMethod.Get, meUrl())
+        assertTrue((result as ApiResult.Failure).error is ApiError.Unknown)
     }
 
     @Test
     fun `error statuses map to typed failures`() = runTest {
         suspend fun call(status: HttpStatusCode, body: String = "", headers: io.ktor.http.Headers = jsonHeaders()): ApiError =
             (
-                safeApiCall<UserDto>(
+                safeApiCall<ProfileDto>(
                     clientFor(MockEngine { respond(body, status, headers) }),
                     logger,
                     HttpMethod.Get,
@@ -67,10 +92,9 @@ class SafeApiCallTest {
 
         val conflict = call(
             HttpStatusCode.Conflict,
-            """{"error":{"code":"conflict","message":"stale","details":{"current":{"id":"t1"}}}}""",
+            """{"isSuccess":false,"message":"A budget for this category already exists.","errors":[]}""",
         ) as ApiError.Conflict
-        assertEquals("stale", conflict.message)
-        assertTrue(conflict.currentRow != null)
+        assertEquals("A budget for this category already exists.", conflict.message)
 
         val rateLimited = call(
             HttpStatusCode.TooManyRequests,
@@ -83,28 +107,30 @@ class SafeApiCallTest {
 
         val validation = call(
             HttpStatusCode.BadRequest,
-            """{"error":{"code":"validation_failed","message":"bad","fields":{"amount_minor":"must be positive"}}}""",
+            """{"statusCode":400,"message":"Validation failed.","errors":{"email":["Email is required."]}}""",
         ) as ApiError.Validation
-        assertEquals("must be positive", validation.fields["amount_minor"])
+        assertEquals("Email is required.", validation.fields["email"])
+        assertEquals("Validation failed.", validation.message)
 
-        val unprocessable = call(HttpStatusCode.UnprocessableEntity)
-        assertTrue(unprocessable is ApiError.Validation)
+        assertTrue(call(HttpStatusCode.UnprocessableEntity) is ApiError.Validation)
 
         val server = call(
             HttpStatusCode.InternalServerError,
+            """{"isSuccess":false,"message":"Something went wrong on the server."}""",
             headers = headersOf(
                 HttpHeaders.ContentType to listOf("application/json"),
                 "X-Request-Id" to listOf("req-9"),
             ),
         ) as ApiError.Server
         assertEquals("req-9", server.requestId)
+        assertEquals("Something went wrong on the server.", server.message)
     }
 
     @Test
     fun `malformed success body becomes unknown`() = runTest {
         val (logger, messages) = recordingLogger()
         val engine = MockEngine { respond("not json", HttpStatusCode.OK, jsonHeaders()) }
-        val result = safeApiCall<UserDto>(clientFor(engine), logger, HttpMethod.Get, meUrl())
+        val result = safeApiCall<ProfileDto>(clientFor(engine), logger, HttpMethod.Get, meUrl())
         assertTrue((result as ApiResult.Failure).error is ApiError.Unknown)
         assertTrue(messages.any { it.contains("Invalid response") })
     }
@@ -116,10 +142,10 @@ class SafeApiCallTest {
             if (calls++ == 0) {
                 respond("", HttpStatusCode.InternalServerError)
             } else {
-                respond("""{"data":{"id":"u1"}}""", HttpStatusCode.OK, jsonHeaders())
+                respond(successBody(profileJson), HttpStatusCode.OK, jsonHeaders())
             }
         }
-        val result = safeApiCall<UserDto>(
+        val result = safeApiCall<ProfileDto>(
             clientFor(engine), logger, HttpMethod.Get, meUrl(), retryPolicy = fastRetry,
         )
         assertTrue(result is ApiResult.Success)
@@ -131,9 +157,9 @@ class SafeApiCallTest {
         var calls = 0
         val engine = MockEngine {
             if (calls++ == 0) throw IOException("connection reset")
-            respond("""{"data":{"id":"u1"}}""", HttpStatusCode.OK, jsonHeaders())
+            respond(successBody(profileJson), HttpStatusCode.OK, jsonHeaders())
         }
-        val result = safeApiCall<UserDto>(
+        val result = safeApiCall<ProfileDto>(
             clientFor(engine), logger, HttpMethod.Get, meUrl(), retryPolicy = fastRetry,
         )
         assertTrue(result is ApiResult.Success)
@@ -147,7 +173,7 @@ class SafeApiCallTest {
             calls++
             throw IOException("connection reset")
         }
-        val result = safeApiCall<UserDto>(
+        val result = safeApiCall<ProfileDto>(
             clientFor(engine), logger, HttpMethod.Get, meUrl(), retryPolicy = fastRetry,
         )
         assertEquals(ApiError.Offline, (result as ApiResult.Failure).error)
@@ -160,7 +186,7 @@ class SafeApiCallTest {
             delay(120_000)
             respond("", HttpStatusCode.OK)
         }
-        val result = safeApiCall<UserDto>(
+        val result = safeApiCall<ProfileDto>(
             clientFor(engine), logger, HttpMethod.Get, meUrl(), retryPolicy = RetryPolicy.NONE,
         )
         assertEquals(ApiError.Timeout, (result as ApiResult.Failure).error)
@@ -180,7 +206,7 @@ class SafeApiCallTest {
     fun `cancellation is rethrown untouched`() = runTest {
         val engine = MockEngine { throw CancellationException("cancelled") }
         val thrown = runCatching {
-            safeApiCall<UserDto>(clientFor(engine), logger, HttpMethod.Get, meUrl())
+            safeApiCall<ProfileDto>(clientFor(engine), logger, HttpMethod.Get, meUrl())
         }.exceptionOrNull()
         assertTrue(thrown is CancellationException)
     }
@@ -189,34 +215,45 @@ class SafeApiCallTest {
     fun `no content responses succeed without parsing`() = runTest {
         val engine = MockEngine { respond("", HttpStatusCode.NoContent) }
         val result = safeApiCallNoContent(
-            clientFor(engine), logger, HttpMethod.Delete, endpoints.url(ApiPaths.AUTH_LOGOUT),
+            clientFor(engine), logger, HttpMethod.Delete, endpoints.url(ApiPaths.byId(ApiPaths.TRANSACTIONS, "t1")),
         )
         assertTrue(result is ApiResult.Success)
     }
 
     @Test
+    fun `bare endpoint skips the result envelope`() = runTest {
+        val engine = MockEngine {
+            respond("""{"status":"Healthy","totalDuration":"00:00:00.01"}""", HttpStatusCode.OK, jsonHeaders())
+        }
+        val result = safeApiCallBare<HealthCheckDto>(
+            clientFor(engine), logger, HttpMethod.Get, endpoints.url(ApiPaths.HEALTH),
+        )
+        assertEquals("Healthy", (result as ApiResult.Success).data.status)
+    }
+
+    @Test
     fun `request id is attached and logs never carry payloads`() = runTest {
         val (logger, messages) = recordingLogger()
-        val engine = MockEngine { request ->
+        val engine = MockEngine {
             respond(
-                """{"error":{"code":"validation_failed"}}""",
+                """{"statusCode":400,"message":"Validation failed.","errors":{"note":["Too long."]}}""",
                 HttpStatusCode.BadRequest,
                 jsonHeaders(),
             )
         }
-        val result = safeApiCall<UserDto>(
+        val result = safeApiCall<ProfileDto>(
             client = clientFor(engine),
             logger = logger,
             method = HttpMethod.Post,
             url = endpoints.url(ApiPaths.TRANSACTIONS),
             requestId = "req-fixed",
-            configure = { setBody("""{"note":"secret-note","amount_minor":123456}""") },
+            configure = { setBody("""{"note":"secret-note","amountIrr":123456}""") },
         )
         assertTrue(result is ApiResult.Failure)
         assertEquals("req-fixed", engine.requestHistory.single().headers["X-Request-Id"])
 
         val exchangeLog = messages.single { it.startsWith("POST") }
-        assertTrue(exchangeLog.contains("POST /api/v1/transactions -> 400"))
+        assertTrue(exchangeLog.contains("POST /api/transactions -> 400"))
         assertFalse(messages.any { it.contains("secret-note") || it.contains("123456") })
     }
 }

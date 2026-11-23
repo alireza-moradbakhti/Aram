@@ -101,6 +101,7 @@ class TransactionRepositoryImpl @Inject constructor(
                     createdAt = now,
                     updatedAt = now,
                     deletedAt = null,
+                    pendingPush = true,
                 )
                 transactionDao.upsert(entity)
                 entity.toModel()

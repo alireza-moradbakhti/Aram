@@ -17,6 +17,7 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AramDatabase =
         Room.databaseBuilder(context, AramDatabase::class.java, AramDatabase.NAME)
+            .addMigrations(AramDatabase.MIGRATION_1_2)
             .build()
 
     @Provides

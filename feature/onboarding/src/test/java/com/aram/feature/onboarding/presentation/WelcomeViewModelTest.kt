@@ -17,6 +17,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -106,11 +107,127 @@ class WelcomeViewModelTest {
         assertEquals(1, repository.createCalls)
     }
 
+    @Test
+    fun `switching to sign in clears the password and errors`() = runTest(dispatcher) {
+        val viewModel = WelcomeViewModel(FakeAuthRepository(result = Outcome.Failure(AppError.Storage())))
+
+        viewModel.onNameChange("Aram")
+        viewModel.onCreateProfile()
+        advanceUntilIdle()
+
+        viewModel.onOpenSignIn()
+
+        val state = viewModel.uiState.value
+        assertEquals(AuthScreen.SignIn, state.screen)
+        assertEquals(SubmitState.Idle, state.submitState)
+        assertTrue(state.fieldErrors.isEmpty())
+    }
+
+    @Test
+    fun `sign in sends trimmed credentials`() = runTest(dispatcher) {
+        val repository = FakeAuthRepository()
+        val viewModel = WelcomeViewModel(repository)
+
+        viewModel.onOpenSignIn()
+        viewModel.onEmailChange("  demo@aram.app ")
+        viewModel.onPasswordChange("demo1234")
+        viewModel.onSubmit()
+        advanceUntilIdle()
+
+        assertEquals("demo@aram.app", repository.lastEmail)
+        assertEquals("demo1234", repository.lastPassword)
+        assertEquals(1, repository.signInCalls)
+    }
+
+    @Test
+    fun `validation failure lands in field errors without a generic alert`() =
+        runTest(dispatcher) {
+            val repository = FakeAuthRepository(
+                result = Outcome.Failure(
+                    AppError.Validation(mapOf("email" to "Enter a valid email address")),
+                ),
+            )
+            val viewModel = WelcomeViewModel(repository)
+
+            viewModel.onOpenSignUp()
+            viewModel.onNameChange("Aram")
+            viewModel.onEmailChange("not-an-email")
+            viewModel.onPasswordChange("demo1234")
+            viewModel.onSubmit()
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals("Enter a valid email address", state.fieldErrors["email"])
+            assertEquals(SubmitState.Idle, state.submitState)
+        }
+
+    @Test
+    fun `sign up requires the terms checkbox`() = runTest(dispatcher) {
+        val repository = FakeAuthRepository()
+        val viewModel = WelcomeViewModel(repository)
+
+        viewModel.onOpenSignUp()
+        viewModel.onTermsChange(false)
+        viewModel.onNameChange("Aram")
+        viewModel.onEmailChange("aram@example.com")
+        viewModel.onPasswordChange("aram1234")
+        viewModel.onSubmit()
+        advanceUntilIdle()
+
+        assertEquals("Accept the Terms to continue", viewModel.uiState.value.fieldErrors["terms"])
+        assertEquals(0, repository.registerCalls)
+    }
+
+    @Test
+    fun `sign up sends name email and password`() = runTest(dispatcher) {
+        val repository = FakeAuthRepository()
+        val viewModel = WelcomeViewModel(repository)
+
+        viewModel.onOpenSignUp()
+        viewModel.onNameChange("Aram Moradi")
+        viewModel.onEmailChange("aram@example.com")
+        viewModel.onPasswordChange("aram1234")
+        viewModel.onSubmit()
+        advanceUntilIdle()
+
+        assertEquals("Aram Moradi", repository.lastName)
+        assertEquals("aram@example.com", repository.lastEmail)
+        assertEquals("aram1234", repository.lastPassword)
+        assertEquals(1, repository.registerCalls)
+    }
+
+    @Test
+    fun `demo shortcut fills the sign in form`() = runTest(dispatcher) {
+        val viewModel = WelcomeViewModel(FakeAuthRepository())
+        val demo = DemoCredentials(email = "demo@aram.app", password = "demo1234")
+
+        viewModel.onUseDemo(demo)
+
+        val state = viewModel.uiState.value
+        assertEquals(AuthScreen.SignIn, state.screen)
+        assertEquals("demo@aram.app", state.email)
+        assertEquals("demo1234", state.password)
+        assertFalse(state.passwordVisible)
+    }
+
+    @Test
+    fun `password strength follows the meter rules`() {
+        assertEquals(PasswordStrength.Empty, strengthOf(""))
+        assertEquals(PasswordStrength.Weak, strengthOf("abcdefgh"))
+        assertEquals(PasswordStrength.Fair, strengthOf("aram1234"))
+        assertEquals(PasswordStrength.Strong, strengthOf("Aram1234Secure!"))
+    }
+
     private class FakeAuthRepository(
         private val result: Outcome<UserProfile> = Outcome.Success(profile),
     ) : AuthRepository {
 
         var createCalls = 0
+        var registerCalls = 0
+        var signInCalls = 0
+        var lastName: String? = null
+        var lastEmail: String? = null
+        var lastPassword: String? = null
 
         override fun observeSession(): Flow<Outcome<UserProfile?>> =
             flowOf(Outcome.Success(null))
@@ -119,6 +236,27 @@ class WelcomeViewModelTest {
             createCalls++
             return result
         }
+
+        override suspend fun register(
+            displayName: String,
+            email: String,
+            password: String,
+        ): Outcome<UserProfile> {
+            registerCalls++
+            lastName = displayName.trim()
+            lastEmail = email.trim()
+            lastPassword = password
+            return result
+        }
+
+        override suspend fun signIn(email: String, password: String): Outcome<UserProfile> {
+            signInCalls++
+            lastEmail = email.trim()
+            lastPassword = password
+            return result
+        }
+
+        override suspend fun updateProfile(displayName: String): Outcome<UserProfile> = result
 
         override suspend fun signOut(): Outcome<Unit> = Outcome.Success(Unit)
     }

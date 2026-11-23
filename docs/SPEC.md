@@ -92,7 +92,9 @@ Launch
 
 **Budgets** — app bar, month nav ("Resets 1 Nov · N days left"), total budget card (spent/left, progress bar, per-day and remaining), icon category cards with progress bars and used/left or over-by labels, "New budget" primary.
 
-**Profile** — avatar + name + "Local profile" + sync line, stats strip (transactions/budgets/goals), Account group (Edit profile, Security, Notifications), Preferences group (Appearance, Currency, Export), Account access group (danger row) that opens the **Manage account** sheet (edit profile, change password, export, log out, delete). Log out confirms in a design dialog (tinted icon square, ghost Cancel + primary confirm) and returns to Welcome. Release builds hide the Developer group (Simulate crash).
+**Profile** — avatar + name + "Local profile" + sync line, stats strip (transactions/budgets/goals), Account group (Edit profile, Security, Notifications) whose rows open sheets, and an Account access group (danger row) that opens the **Manage account** sheet (edit profile, export, log out, delete). The gear opens **Settings** (main currency, language, appearance). Log out confirms in a design dialog (tinted icon square, ghost Cancel + primary confirm) and returns to Welcome. Release builds hide the Developer group (Simulate crash).
+
+**Goals** — app bar with a "+" that opens the new-goal sheet (name, target IRR amount, target date, weekly auto-save, type chips, note); summary card (saved across goals, best streak), Active/Completed filter, goal cards with ring progress and weekly-streak chips, and a completed goal kept for the record. Goal detail shows saved-of-target with pace insight, an "Add money" primary that opens the contribute sheet (amount, note), and the contribution ledger with the scheduled auto-save on top.
 
 **Recovery** — an uncaught exception closes the app; the next launch shows a dark "Aram closed unexpectedly" screen with Continue, which clears the marker and resumes into the shell.
 
