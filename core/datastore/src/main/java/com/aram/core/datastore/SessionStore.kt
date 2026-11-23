@@ -3,7 +3,8 @@ package com.aram.core.datastore
 import kotlinx.coroutines.flow.Flow
 
 /**
- * The signed-in user id. Guests created offline have an id but no token; a
+ * The signed-in user id the repositories depend on; [SessionDataStore] is the
+ * app implementation. Guests created offline have an id but no token; a
  * session id survives process death until [clear].
  */
 interface SessionStore {

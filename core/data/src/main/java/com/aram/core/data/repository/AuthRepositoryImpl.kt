@@ -10,6 +10,7 @@ import com.aram.core.database.dao.AccountDao
 import com.aram.core.database.dao.BudgetDao
 import com.aram.core.database.dao.CategoryDao
 import com.aram.core.database.dao.RecurringRuleDao
+import com.aram.core.database.dao.SyncOutboxDao
 import com.aram.core.database.dao.SavingsGoalDao
 import com.aram.core.database.dao.TransactionDao
 import com.aram.core.database.dao.UserDao
@@ -17,6 +18,7 @@ import com.aram.core.database.entity.UserEntity
 import com.aram.core.datastore.SessionStore
 import com.aram.core.datastore.SessionToken
 import com.aram.core.datastore.SessionTokenStore
+import com.aram.core.datastore.SyncMetadataStore
 import com.aram.core.domain.repository.AuthRepository
 import com.aram.core.logging.Logger
 import com.aram.core.model.AppError
@@ -69,6 +71,8 @@ class AuthRepositoryImpl @Inject constructor(
     private val budgetDao: BudgetDao,
     private val savingsGoalDao: SavingsGoalDao,
     private val recurringRuleDao: RecurringRuleDao,
+    private val outboxDao: SyncOutboxDao,
+    private val syncMetadata: SyncMetadataStore,
     private val dispatchers: CoroutineDispatchers,
     private val logger: Logger,
     private val clock: Clock,
@@ -327,6 +331,8 @@ class AuthRepositoryImpl @Inject constructor(
         accountDao.deleteByUser(userId)
         categoryDao.deleteByUser(userId)
         userDao.deleteById(userId)
+        outboxDao.deleteByUser(userId)
+        syncMetadata.clear()
     }
 
     private fun parseExpiry(expiresAtUtc: String, now: Long): Long =

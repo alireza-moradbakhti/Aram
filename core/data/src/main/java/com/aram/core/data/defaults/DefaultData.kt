@@ -62,5 +62,6 @@ internal object DefaultData {
         createdAt = now,
         updatedAt = now,
         deletedAt = null,
+        slug = iconKey,
     )
 }

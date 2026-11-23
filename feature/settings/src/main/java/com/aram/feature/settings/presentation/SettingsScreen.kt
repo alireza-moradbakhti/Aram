@@ -55,6 +55,7 @@ import com.aram.core.designsystem.component.AramIconButton
 import com.aram.core.designsystem.component.AramPrimaryButton
 import com.aram.core.designsystem.component.GlassCard
 import com.aram.core.designsystem.icon.AramIcons
+import com.aram.core.model.SyncStatus
 
 data class DebugScenarioOption(
     val id: String,
@@ -66,6 +67,8 @@ data class DebugScenarioOption(
 fun SettingsScreen(
     displayName: String,
     onSignOut: () -> Unit,
+    syncStatus: SyncStatusUi = SyncStatusUi(),
+    onSyncNow: () -> Unit = {},
     showDebugActions: Boolean = false,
     debugScenarios: List<DebugScenarioOption> = emptyList(),
     activeDebugScenarioId: String? = null,
@@ -123,14 +126,32 @@ fun SettingsScreen(
                     modifier = Modifier
                         .size(6.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary),
+                        .background(
+                            when (syncStatus.status) {
+                                SyncStatus.FAILED -> colors.danger
+                                SyncStatus.OFFLINE, SyncStatus.STALE -> colors.secondaryHi
+                                else -> MaterialTheme.colorScheme.primary
+                            },
+                        ),
                 )
                 Text(
-                    text = "Synced just now · offline-first",
+                    text = syncSummary(syncStatus),
                     style = MaterialTheme.typography.labelSmall,
                     color = colors.textFaint,
                     modifier = Modifier.padding(start = 6.dp),
                 )
+                if (!syncStatus.isSyncing) {
+                    Text(
+                        text = "Sync now",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.primaryHi,
+                        modifier = Modifier
+                            .padding(start = 10.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable(onClick = onSyncNow)
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                    )
+                }
             }
         }
 
