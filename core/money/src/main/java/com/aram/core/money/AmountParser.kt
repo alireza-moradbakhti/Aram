@@ -29,7 +29,8 @@ object AmountParser {
             return AmountParseResult.TooManyFractionDigits(currency.fractionDigits)
         }
 
-        val money = Money.ofMajor(major, currency)
+        val money = runCatching { Money.ofMajor(major, currency) }.getOrNull()
+            ?: return AmountParseResult.Invalid
         return when {
             money.amountMinor == 0L -> AmountParseResult.Zero
             money.amountMinor < 0L -> AmountParseResult.Invalid
