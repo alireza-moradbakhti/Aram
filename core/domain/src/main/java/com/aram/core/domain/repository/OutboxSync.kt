@@ -17,7 +17,10 @@ interface OutboxSync {
 
     val snapshot: Flow<OutboxSnapshot>
 
-    /** True when nothing is left to push. */
+    /**
+     * True when nothing is left to push. A local profile has no token, so its
+     * queue is left intact and reported as settled until the user signs in.
+     */
     suspend fun flush(): Boolean
 
     /** Clears terminal failures so the next flush tries them again. */

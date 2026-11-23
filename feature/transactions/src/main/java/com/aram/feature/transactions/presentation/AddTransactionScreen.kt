@@ -574,6 +574,22 @@ private fun AccountType.label(): String = when (this) {
     AccountType.INVESTMENT -> "Investment"
 }
 
+private fun categoryIcon(iconKey: String): ImageVector = when (iconKey) {
+    "wallet" -> AramIcons.wallet
+    "food" -> AramIcons.cafe
+    "groceries" -> AramIcons.cart
+    "transport" -> AramIcons.car
+    "home" -> AramIcons.home
+    "utilities" -> AramIcons.receipt
+    "shopping" -> AramIcons.shoppingBag
+    "health" -> AramIcons.shield
+    "fun" -> AramIcons.smile
+    "subscriptions" -> AramIcons.musicNote
+    "salary" -> AramIcons.arrowIn
+    "freelance" -> AramIcons.trending
+    else -> AramIcons.receipt
+}
+
 @Preview(showBackground = true, widthDp = 360)
 @Composable
 private fun AddTransactionScreenDarkPreview() {
