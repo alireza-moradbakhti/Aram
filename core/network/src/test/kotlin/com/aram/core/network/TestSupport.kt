@@ -10,7 +10,7 @@ import com.aram.core.network.config.ApiMode
 import com.aram.core.network.http.AramHttpClient
 import com.aram.core.network.http.TokenProvider
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.HttpClientEngine
+import io.ktor.client.engine.mock.MockEngine
 import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
 import io.ktor.http.headersOf
@@ -32,7 +32,7 @@ internal fun recordingLogger(): Pair<Logger, MutableList<String>> {
 }
 
 internal fun clientFor(
-    engine: HttpClientEngine,
+    engine: MockEngine,
     tokens: TokenProvider = TokenProvider.None,
 ): HttpClient = AramHttpClient.create(testConfig, engine, tokens)
 
@@ -42,11 +42,15 @@ internal fun jsonHeaders(): Headers =
 internal class FakeTokens(initial: String? = "token-1") : TokenProvider {
 
     var token: String? = initial
-    var unauthorizedCount = 0
+    var refreshCount = 0
+    var refreshSucceeds = true
 
     override suspend fun accessToken(): String? = token
 
-    override suspend fun onUnauthorized() {
-        unauthorizedCount++
+    override suspend fun refresh(): Boolean {
+        refreshCount++
+        if (!refreshSucceeds) return false
+        token = "token-${refreshCount + 1}"
+        return true
     }
 }

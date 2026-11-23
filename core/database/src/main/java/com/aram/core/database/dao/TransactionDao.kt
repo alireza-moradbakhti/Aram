@@ -62,6 +62,17 @@ interface TransactionDao {
 
     @Query(
         "SELECT * FROM transactions WHERE userId = :userId AND deletedAt IS NULL " +
+            "AND occurredAt >= :fromInclusive AND occurredAt < :toExclusive " +
+            "ORDER BY occurredAt DESC",
+    )
+    fun observeRange(
+        userId: String,
+        fromInclusive: Long,
+        toExclusive: Long,
+    ): Flow<List<TransactionEntity>>
+
+    @Query(
+        "SELECT * FROM transactions WHERE userId = :userId AND deletedAt IS NULL " +
             "ORDER BY occurredAt DESC LIMIT :limit",
     )
     fun observeRecent(userId: String, limit: Int): Flow<List<TransactionEntity>>
