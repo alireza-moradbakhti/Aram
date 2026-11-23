@@ -1,35 +1,22 @@
 package com.aram.core.network.dto
 
-import com.aram.core.network.api.ApiMeta
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonObject
 
-/** `{ "data": …, "meta": … }` — the success envelope from the contract. */
+/** `Result<T>` from the API: every JSON endpoint wraps its payload this way. */
 @Serializable
-data class DataEnvelope<T>(
-    val data: T,
-    val meta: ApiMetaDto? = null,
+data class ResultEnvelope<T>(
+    val isSuccess: Boolean = false,
+    val message: String = "",
+    val errors: List<String> = emptyList(),
+    val data: T? = null,
 )
 
+/** FastEndpoints' default `400` body; the client maps it to field errors. */
 @Serializable
-data class ApiMetaDto(
-    val nextCursor: String? = null,
-    val serverTime: Long? = null,
-)
-
-fun ApiMetaDto.toApiMeta(): ApiMeta = ApiMeta(nextCursor = nextCursor, serverTime = serverTime)
-
-/** `{ "error": { … } }` — the failure envelope from the contract. */
-@Serializable
-data class ErrorEnvelope(
-    val error: ErrorBody,
-)
-
-@Serializable
-data class ErrorBody(
-    val code: String = "",
+data class ValidationErrorEnvelope(
+    val statusCode: Int? = null,
     val message: String? = null,
-    val fields: Map<String, String>? = null,
-    val requestId: String? = null,
-    val details: JsonObject? = null,
+    val errors: Map<String, List<String>>? = null,
+    val title: String? = null,
+    val detail: String? = null,
 )

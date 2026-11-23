@@ -28,4 +28,10 @@ interface SavingsGoalDao {
             "WHERE goalId = :goalId AND deletedAt IS NULL",
     )
     fun observeContributedTotal(goalId: String): Flow<Long>
+
+    @Query("DELETE FROM savings_goals WHERE userId = :userId")
+    suspend fun deleteGoalsByUser(userId: String)
+
+    @Query("DELETE FROM goal_contributions WHERE userId = :userId")
+    suspend fun deleteContributionsByUser(userId: String)
 }

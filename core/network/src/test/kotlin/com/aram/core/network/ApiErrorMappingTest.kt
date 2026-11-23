@@ -3,7 +3,6 @@ package com.aram.core.network
 import com.aram.core.model.AppError
 import com.aram.core.network.api.ApiError
 import com.aram.core.network.api.toAppError
-import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -27,8 +26,8 @@ class ApiErrorMappingTest {
     }
 
     @Test
-    fun `conflict keeps the canonical row out of the app error`() {
-        val mapped = ApiError.Conflict("stale", JsonPrimitive("row")).toAppError() as AppError.Conflict
-        assertEquals("stale", mapped.message)
+    fun `conflict and server keep their message`() {
+        assertEquals("stale", (ApiError.Conflict("stale").toAppError() as AppError.Conflict).message)
+        assertEquals(null, (ApiError.Conflict().toAppError() as AppError.Conflict).message)
     }
 }

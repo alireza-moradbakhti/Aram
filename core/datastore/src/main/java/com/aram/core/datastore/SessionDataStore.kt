@@ -19,20 +19,20 @@ private val Context.sessionPreferences: DataStore<Preferences> by preferencesDat
 @Singleton
 class SessionDataStore @Inject constructor(
     @ApplicationContext context: Context,
-) {
+) : SessionStore {
     private val dataStore = context.sessionPreferences
 
-    val userId: Flow<String?> = dataStore.data.map { preferences ->
+    override val userId: Flow<String?> = dataStore.data.map { preferences ->
         preferences[Keys.UserId]
     }
 
-    suspend fun setUserId(userId: String) {
+    override suspend fun setUserId(userId: String) {
         dataStore.edit { preferences ->
             preferences[Keys.UserId] = userId
         }
     }
 
-    suspend fun clear() {
+    override suspend fun clear() {
         dataStore.edit { preferences -> preferences.clear() }
     }
 
