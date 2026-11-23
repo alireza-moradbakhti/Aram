@@ -51,4 +51,15 @@
   (new ordering/cursor/convergence tests included).
 - `:feature:settings:testDebugUnitTest :feature:transactions:testDebugUnitTest`
   — pass.
-- Full CI-equivalent run recorded after the final `assembleAlphaDebug test`.
+- `:app:assembleAlphaDebug test -PbuildDate=20261122` — pass.
+- Device sheet on emulator-5554 (Android 16), stacked integration build:
+  - Cold start as a local profile left the settings header at "Not synced yet"
+    until the user pressed "Sync now".
+  - Fix: `MainViewModel` now watches session transitions and calls
+    `SyncScheduler.syncNow()` when a guest or a different user becomes active,
+    so signing in pulls the account's ledger without a restart. To make the
+    scheduler fakeable for `MainViewModelTest`, it is now an interface with
+    `WorkManagerSyncScheduler` as the WorkManager implementation.
+  - Re-verified on device: signing in as `demo@aram.app` immediately pulled 13
+    entries and the settings header updated; a restored session at cold start
+    still syncs only once.

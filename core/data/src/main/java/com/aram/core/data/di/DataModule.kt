@@ -6,6 +6,8 @@ import com.aram.core.data.outbox.WorkManagerOutboxTrigger
 import com.aram.core.data.repository.AuthRepositoryImpl
 import com.aram.core.data.repository.LedgerSyncRepositoryImpl
 import com.aram.core.data.repository.TransactionRepositoryImpl
+import com.aram.core.data.sync.SyncScheduler
+import com.aram.core.data.sync.WorkManagerSyncScheduler
 import com.aram.core.datastore.SessionDataStore
 import com.aram.core.datastore.SessionStore
 import com.aram.core.datastore.SyncMetadataDataStore
@@ -43,6 +45,10 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindLedgerSync(implementation: LedgerSyncRepositoryImpl): LedgerSync
+
+    @Binds
+    @Singleton
+    abstract fun bindSyncScheduler(implementation: WorkManagerSyncScheduler): SyncScheduler
 
     @Binds
     @Singleton

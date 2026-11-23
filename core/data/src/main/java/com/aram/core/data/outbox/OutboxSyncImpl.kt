@@ -90,7 +90,9 @@ class OutboxSyncImpl @Inject constructor(
 
     private suspend fun flushLocked(): Boolean {
         val userId = session.userId.first() ?: return true
-        if (tokenProvider.accessToken() == null) return outboxDao.count(userId) == 0
+        // A local profile has a user but no token; entries wait for sign-in.
+        // Returning false here would make the worker retry forever.
+        if (tokenProvider.accessToken() == null) return true
 
         while (true) {
             val now = clock.millis()

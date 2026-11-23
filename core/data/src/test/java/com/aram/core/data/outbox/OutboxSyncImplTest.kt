@@ -179,6 +179,19 @@ class OutboxSyncImplTest {
     }
 
     @Test
+    fun `a local profile without a token settles instead of retrying forever`() = runTest {
+        val harness = harness()
+        val entry = harness.enqueueCreate("tx-1", createdAt = 1L)
+        harness.tokenStore.clear()
+
+        assertTrue(harness.outbox.flush())
+
+        val kept = harness.dao.rows.getValue(entry.id)
+        assertEquals(0, kept.attempts)
+        assertFalse(harness.serverIds().contains("tx-1"))
+    }
+
+    @Test
     fun `retryFailed resets parked entries and discard drops them`() = runTest {
         val harness = harness()
         harness.dao.insert(

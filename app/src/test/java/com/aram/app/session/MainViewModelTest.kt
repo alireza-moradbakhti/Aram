@@ -1,5 +1,6 @@
 package com.aram.app.session
 
+import com.aram.core.data.sync.SyncScheduler
 import com.aram.core.designsystem.state.UiState
 import com.aram.core.domain.repository.AuthRepository
 import com.aram.core.model.AppError
@@ -38,7 +39,7 @@ class MainViewModelTest {
 
     @Test
     fun `starts loading then becomes empty when logged out`() = runTest(dispatcher) {
-        val viewModel = MainViewModel(FakeAuthRepository(Outcome.Success(null)))
+        val viewModel = MainViewModel(FakeAuthRepository(Outcome.Success(null)), FakeSyncScheduler())
 
         assertEquals(UiState.Loading, viewModel.session.value)
 
@@ -49,7 +50,7 @@ class MainViewModelTest {
 
     @Test
     fun `session with a profile becomes content`() = runTest(dispatcher) {
-        val viewModel = MainViewModel(FakeAuthRepository(Outcome.Success(profile)))
+        val viewModel = MainViewModel(FakeAuthRepository(Outcome.Success(profile)), FakeSyncScheduler())
 
         advanceUntilIdle()
 
@@ -59,7 +60,7 @@ class MainViewModelTest {
     @Test
     fun `repository failure becomes an error state`() = runTest(dispatcher) {
         val error = AppError.Server(requestId = "req-1")
-        val viewModel = MainViewModel(FakeAuthRepository(Outcome.Failure(error)))
+        val viewModel = MainViewModel(FakeAuthRepository(Outcome.Failure(error)), FakeSyncScheduler())
 
         advanceUntilIdle()
 
@@ -69,7 +70,7 @@ class MainViewModelTest {
     @Test
     fun `retry re-subscribes and recovers from a failure`() = runTest(dispatcher) {
         val repository = FakeAuthRepository(Outcome.Failure(AppError.Storage()))
-        val viewModel = MainViewModel(repository)
+        val viewModel = MainViewModel(repository, FakeSyncScheduler())
 
         advanceUntilIdle()
         assertTrue(viewModel.session.value is UiState.Error)
@@ -80,6 +81,44 @@ class MainViewModelTest {
 
         assertEquals(UiState.Content(profile), viewModel.session.value)
         assertEquals(2, repository.subscriptions)
+    }
+
+    @Test
+    fun `signing in after a guest session pulls the ledger`() = runTest(dispatcher) {
+        val repository = FakeAuthRepository(Outcome.Success(null))
+        val scheduler = FakeSyncScheduler()
+        val viewModel = MainViewModel(repository, scheduler)
+
+        advanceUntilIdle()
+        assertEquals(UiState.Empty, viewModel.session.value)
+        assertEquals(0, scheduler.syncNowCalls)
+
+        repository.session.value = Outcome.Success(profile)
+        advanceUntilIdle()
+
+        assertEquals(UiState.Content(profile), viewModel.session.value)
+        assertEquals(1, scheduler.syncNowCalls)
+    }
+
+    @Test
+    fun `a restored session at cold start does not double sync`() = runTest(dispatcher) {
+        val scheduler = FakeSyncScheduler()
+        MainViewModel(FakeAuthRepository(Outcome.Success(profile)), scheduler)
+
+        advanceUntilIdle()
+
+        assertEquals(0, scheduler.syncNowCalls)
+    }
+
+    private class FakeSyncScheduler : SyncScheduler {
+
+        var syncNowCalls = 0
+
+        override fun schedulePeriodic() = Unit
+
+        override fun syncNow() {
+            syncNowCalls++
+        }
     }
 
     private class FakeAuthRepository(
