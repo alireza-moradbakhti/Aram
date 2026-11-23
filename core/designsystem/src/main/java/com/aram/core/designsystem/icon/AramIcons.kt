@@ -198,6 +198,38 @@ object AramIcons {
         "M8 10V7a4 4 0 0 1 8 0v3",
     )
 
+    val mail: ImageVector = lineIcon(
+        "Mail",
+        "M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z",
+        "m4 7 8 6 8-6",
+    )
+
+    val person: ImageVector = lineIcon(
+        "Person",
+        "M12,8a4,4 0 1,0 0,0.01",
+        "M4 21c0-4 3.6-7 8-7s8 3 8 7",
+    )
+
+    val eye: ImageVector = lineIcon(
+        "Eye",
+        "M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6Z",
+        "M12,12a2.6,2.6 0 1,0 0,0.01",
+    )
+
+    val eyeOff: ImageVector = lineIcon(
+        "EyeOff",
+        "M3 3l18 18",
+        "M10.6 6.2A9.6 9.6 0 0 1 12 6c6.4 0 10 6 10 6a17 17 0 0 1-3.2 3.9",
+        "M6.1 6.6A17.5 17.5 0 0 0 2 12s3.6 6 10 6a9.4 9.4 0 0 0 4.4-1.1",
+        "M9.9 9.9a3 3 0 0 0 4.2 4.2",
+    )
+
+    val alert: ImageVector = lineIcon(
+        "Alert",
+        "M12,12a9,9 0 1,0 0,0.01",
+        "M12 7v6M12 16.5v.1",
+    )
+
     val receipt: ImageVector = lineIcon(
         "Receipt",
         "M6 3h12v18l-3-2-3 2-3-2-3 2Z",

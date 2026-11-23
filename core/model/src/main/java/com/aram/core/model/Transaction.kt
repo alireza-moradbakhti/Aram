@@ -11,6 +11,7 @@ data class Transaction(
     val note: String?,
     val transferGroupId: String?,
     val recurringRuleId: String?,
+    val pendingPush: Boolean = false,
 )
 
 enum class TransactionType {

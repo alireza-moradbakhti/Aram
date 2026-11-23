@@ -434,10 +434,11 @@ fun MoneyLabel(
     amount: Long,
     modifier: Modifier = Modifier,
     incoming: Boolean = false,
+    fractionDigits: Int = 0,
 ) {
     val colors = MaterialTheme.aramColors
     Text(
-        text = com.aram.core.designsystem.text.formatSignedAmount(amount),
+        text = com.aram.core.designsystem.text.formatSignedMinor(amount, fractionDigits),
         style = AramTextStyles.money,
         color = if (incoming) colors.primaryHi else MaterialTheme.colorScheme.onSurface,
         modifier = modifier,

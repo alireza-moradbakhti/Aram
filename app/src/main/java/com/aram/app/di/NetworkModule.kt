@@ -50,6 +50,7 @@ object NetworkModule {
         config: ApiConfig,
         scenarios: MockScenarioController,
         store: MockApiStore,
+        tokenProvider: TokenProvider,
     ): HttpClient = AramHttpClient.create(
         config = config,
         engine = if (config.mode == ApiMode.MOCK) {
@@ -57,7 +58,6 @@ object NetworkModule {
         } else {
             OkHttp.create()
         },
-        // AR-040 swaps in the Keystore-backed session.
-        tokenProvider = TokenProvider.None,
+        tokenProvider = tokenProvider,
     )
 }
