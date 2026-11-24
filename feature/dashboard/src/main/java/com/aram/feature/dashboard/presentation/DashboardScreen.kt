@@ -168,9 +168,9 @@ private fun DashboardContent(
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionTile(AramIcons.add, "Add", Modifier.weight(1f))
-            ActionTile(AramIcons.arrowIn, "Income", Modifier.weight(1f))
+            ActionTile(AramIcons.wallet, "Income", Modifier.weight(1f))
             ActionTile(AramIcons.qr, "Scan", Modifier.weight(1f))
-            ActionTile(AramIcons.star, "Goal", Modifier.weight(1f))
+            ActionTile(AramIcons.target, "Goal", Modifier.weight(1f))
         }
 
         AramSectionHeader(

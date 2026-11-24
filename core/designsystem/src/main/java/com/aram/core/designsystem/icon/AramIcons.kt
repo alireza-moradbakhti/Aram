@@ -279,6 +279,32 @@ object AramIcons {
         "M3 7l2-4h14l2 4",
         "M9 12h6",
     )
+
+    val globe: ImageVector = lineIcon(
+        "Globe",
+        "M3,12a9,9 0 1,0 18,0a9,9 0 1,0 -18,0",
+        "M3 12h18",
+        "M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3Z",
+    )
+
+    val barChart: ImageVector = lineIcon(
+        "BarChart",
+        "M5 20V11",
+        "M12 20V4",
+        "M19 20v-6",
+    )
+
+    val clock: ImageVector = lineIcon(
+        "Clock",
+        "M3,12a9,9 0 1,0 18,0a9,9 0 1,0 -18,0",
+        "M12 7v5l3 2",
+    )
+
+    val aramGlyph: ImageVector = lineIcon(
+        "AramGlyph",
+        "M5 19 12 5l7 14",
+        "M8.5 14h7",
+    )
 }
 
 private const val VIEWPORT = 24f

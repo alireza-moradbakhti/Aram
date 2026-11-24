@@ -8,9 +8,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -34,15 +38,18 @@ import com.aram.core.model.UserProfile
 import com.aram.core.network.mock.MockScenario
 import com.aram.feature.budgets.presentation.BudgetsScreen
 import com.aram.feature.dashboard.presentation.DashboardRoute
+import com.aram.feature.onboarding.presentation.AramSplashScreen
 import com.aram.feature.onboarding.presentation.DemoCredentials
-import com.aram.feature.onboarding.presentation.WelcomeRoute
+import com.aram.feature.onboarding.presentation.EntryRoute
 import com.aram.feature.settings.presentation.DebugScenarioOption
 import com.aram.feature.settings.presentation.SettingsRoute
 import com.aram.feature.transactions.presentation.AddTransactionRoute
 import com.aram.feature.transactions.presentation.TransactionsRoute
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private const val ADD_TRANSACTION_ROUTE = "add-transaction"
+private const val SPLASH_MILLIS = 650L
 
 @Composable
 fun AramApp(
@@ -55,10 +62,23 @@ fun AramApp(
     demoCredentials: DemoCredentials? = null,
     modifier: Modifier = Modifier,
 ) {
-    when (sessionState) {
-        UiState.Loading -> AramBackground(modifier = modifier) {}
+    var splashElapsed by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (!splashElapsed) {
+            delay(SPLASH_MILLIS)
+            splashElapsed = true
+        }
+    }
 
-        UiState.Empty -> WelcomeRoute(
+    if (!splashElapsed || sessionState is UiState.Loading) {
+        AramSplashScreen(modifier = modifier)
+        return
+    }
+
+    when (sessionState) {
+        UiState.Loading -> AramSplashScreen(modifier = modifier)
+
+        UiState.Empty -> EntryRoute(
             demoCredentials = demoCredentials,
             modifier = modifier,
         )
