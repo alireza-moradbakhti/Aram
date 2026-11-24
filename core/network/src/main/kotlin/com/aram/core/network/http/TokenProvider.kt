@@ -1,21 +1,21 @@
 package com.aram.core.network.http
 
 /**
- * Supplies bearer tokens to the client. AR-040 implements the real
- * Keystore-backed version; until then [None] keeps every request anonymous.
+ * Supplies the bearer token to the client. The backend issues a 24-hour JWT
+ * with no refresh endpoint, so a rejected token means the session is over.
  *
- * Implementations must make [refresh] safe against concurrent 401s; the
- * interceptor serializes calls, but a token source may still be shared.
+ * AR-040 implements the persistent, Keystore-backed version; until then [None]
+ * keeps every request anonymous.
  */
 interface TokenProvider {
 
     suspend fun accessToken(): String?
 
-    /** Returns `true` when [accessToken] now yields a fresh token. */
-    suspend fun refresh(): Boolean
+    /** Called once when an authenticated request comes back `401`. */
+    suspend fun onUnauthorized()
 
     data object None : TokenProvider {
         override suspend fun accessToken(): String? = null
-        override suspend fun refresh(): Boolean = false
+        override suspend fun onUnauthorized() = Unit
     }
 }

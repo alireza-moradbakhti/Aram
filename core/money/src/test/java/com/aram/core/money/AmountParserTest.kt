@@ -75,6 +75,14 @@ class AmountParserTest {
     }
 
     @Test
+    fun `amounts that overflow minor units are rejected`() {
+        assertEquals(
+            AmountParseResult.Invalid,
+            AmountParser.parse("999999999999999999999", CurrencyCode.USD),
+        )
+    }
+
+    @Test
     fun `decimal separator follows the locale`() {
         assertEquals(',', AmountParser.decimalSeparator(java.util.Locale.GERMANY))
         assertEquals('.', AmountParser.decimalSeparator(java.util.Locale.US))

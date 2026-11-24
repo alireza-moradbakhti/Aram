@@ -4,7 +4,15 @@ on:
   push:
     branches: [main, dev]
   pull_request:
-    branches: [main, dev]
+    branches:
+      - main
+      - dev
+      # Stacked PRs target the previous feature branch, so CI must run for them too.
+      - "feat/**"
+      - "fix/**"
+      - "chore/**"
+      - "docs/**"
+      - "test/**"
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}

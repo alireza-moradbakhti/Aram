@@ -32,7 +32,7 @@ data class ApiConfig(
     }
 
     private companion object {
-        const val API_PREFIX = "/api/v1"
+        const val API_PREFIX = "/api"
         const val HTTPS_PREFIX = "https://"
     }
 }

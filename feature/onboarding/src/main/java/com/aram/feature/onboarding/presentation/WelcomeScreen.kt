@@ -3,6 +3,7 @@ package com.aram.feature.onboarding.presentation
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,6 +49,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -68,13 +70,34 @@ import com.aram.feature.onboarding.R
 @Composable
 fun WelcomeRoute(
     modifier: Modifier = Modifier,
+    demoCredentials: DemoCredentials? = null,
     viewModel: WelcomeViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     WelcomeScreen(
         uiState = uiState,
         onNameChange = viewModel::onNameChange,
         onCreateProfile = viewModel::onCreateProfile,
+        onOpenSignIn = viewModel::onOpenSignIn,
+        onOpenSignUp = viewModel::onOpenSignUp,
+        onBack = viewModel::onBack,
+        onEmailChange = viewModel::onEmailChange,
+        onPasswordChange = viewModel::onPasswordChange,
+        onTogglePasswordVisibility = viewModel::onTogglePasswordVisibility,
+        onTermsChange = viewModel::onTermsChange,
+        onSubmit = viewModel::onSubmit,
+        onUseDemo = {
+            demoCredentials?.let(viewModel::onUseDemo)
+        },
+        onForgotPassword = {
+            Toast.makeText(
+                context,
+                context.getString(R.string.auth_forgot_password_pending),
+                Toast.LENGTH_SHORT,
+            ).show()
+        },
+        demoCredentials = demoCredentials,
         modifier = modifier,
     )
 }
@@ -85,11 +108,64 @@ fun WelcomeScreen(
     onNameChange: (String) -> Unit,
     onCreateProfile: () -> Unit,
     modifier: Modifier = Modifier,
+    demoCredentials: DemoCredentials? = null,
+    onOpenSignIn: () -> Unit = {},
+    onOpenSignUp: () -> Unit = {},
+    onBack: () -> Unit = {},
+    onEmailChange: (String) -> Unit = {},
+    onPasswordChange: (String) -> Unit = {},
+    onTogglePasswordVisibility: () -> Unit = {},
+    onTermsChange: (Boolean) -> Unit = {},
+    onSubmit: () -> Unit = {},
+    onUseDemo: () -> Unit = {},
+    onForgotPassword: () -> Unit = {},
+) {
+    if (uiState.screen == AuthScreen.Welcome) {
+        WelcomeContent(
+            uiState = uiState,
+            onNameChange = onNameChange,
+            onCreateProfile = onCreateProfile,
+            onOpenSignIn = onOpenSignIn,
+            onOpenSignUp = onOpenSignUp,
+            demoCredentials = demoCredentials,
+            modifier = modifier,
+        )
+    } else {
+        AuthFormScreen(
+            uiState = uiState,
+            demoCredentials = demoCredentials,
+            onBack = onBack,
+            onNameChange = onNameChange,
+            onEmailChange = onEmailChange,
+            onPasswordChange = onPasswordChange,
+            onTogglePasswordVisibility = onTogglePasswordVisibility,
+            onTermsChange = onTermsChange,
+            onSubmit = onSubmit,
+            onSwitchMode = if (uiState.screen == AuthScreen.SignUp) {
+                onOpenSignIn
+            } else {
+                onOpenSignUp
+            },
+            onUseDemo = onUseDemo,
+            onForgotPassword = onForgotPassword,
+            modifier = modifier,
+        )
+    }
+}
+
+@Composable
+private fun WelcomeContent(
+    uiState: WelcomeUiState,
+    onNameChange: (String) -> Unit,
+    onCreateProfile: () -> Unit,
+    onOpenSignIn: () -> Unit,
+    onOpenSignUp: () -> Unit,
+    modifier: Modifier = Modifier,
+    demoCredentials: DemoCredentials? = null,
 ) {
     val isSubmitting = uiState.submitState is SubmitState.Submitting
     val hasSubmitError = uiState.submitState is SubmitState.Failed
     val colors = MaterialTheme.aramColors
-    val context = LocalContext.current
 
     AramBackground(modifier = modifier) {
         Column(
@@ -249,15 +325,42 @@ fun WelcomeScreen(
 
             AramGhostButton(
                 text = stringResource(R.string.welcome_sign_in),
-                onClick = {
-                    Toast.makeText(
-                        context,
-                        context.getString(R.string.welcome_sign_in_unavailable),
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                },
+                onClick = onOpenSignIn,
                 modifier = Modifier.fillMaxWidth(),
             )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.auth_switch_to_signup),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.textDim,
+                )
+                Text(
+                    text = stringResource(R.string.auth_signup_link),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = colors.primaryHi,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(onClick = onOpenSignUp)
+                        .padding(horizontal = 4.dp, vertical = 4.dp),
+                )
+            }
+
+            if (demoCredentials != null) {
+                Text(
+                    text = demoCredentials.hint,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.textFaint,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp),
+                )
+            }
 
             Spacer(Modifier.height(12.dp))
 
