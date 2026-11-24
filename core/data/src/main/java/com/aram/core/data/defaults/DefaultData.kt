@@ -8,7 +8,7 @@ import java.util.UUID
 
 internal object DefaultData {
 
-    const val DEFAULT_CURRENCY = "USD"
+    const val DEFAULT_CURRENCY = "IRR"
 
     fun categories(userId: String, now: Long): List<CategoryEntity> = listOf(
         category(userId, "Salary", CategoryKind.INCOME, "salary", 0xFF059669, 0, now),
@@ -62,5 +62,6 @@ internal object DefaultData {
         createdAt = now,
         updatedAt = now,
         deletedAt = null,
+        slug = iconKey,
     )
 }

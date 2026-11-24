@@ -16,17 +16,17 @@ class ApiConfigTest {
     )
 
     @Test
-    fun `paths resolve under the version prefix`() {
+    fun `paths resolve under the api prefix`() {
         val endpoints = endpointProvider()
-        assertEquals("https://api.aram.test/api/v1/auth/login", endpoints.url(ApiPaths.AUTH_LOGIN))
-        assertEquals("https://api.aram.test/api/v1/accounts", endpoints.url("accounts"))
-        assertEquals("https://api.aram.test/api/v1/sync/push", endpoints.url(ApiPaths.SYNC_PUSH))
+        assertEquals("https://api.aram.test/api/auth/login", endpoints.url(ApiPaths.AUTH_LOGIN))
+        assertEquals("https://api.aram.test/api/accounts", endpoints.url("accounts"))
+        assertEquals("https://api.aram.test/api/sync/push", endpoints.url(ApiPaths.SYNC_PUSH))
     }
 
     @Test
     fun `trailing slash is normalized`() {
         assertEquals(
-            "https://api.aram.test/api/v1/me",
+            "https://api.aram.test/api/auth/me",
             endpointProvider("https://api.aram.test/").url(ApiPaths.ME),
         )
     }
@@ -34,7 +34,8 @@ class ApiConfigTest {
     @Test
     fun `path ids are percent encoded`() {
         assertEquals("/transactions/a%20b", ApiPaths.byId(ApiPaths.TRANSACTIONS, "a b"))
-        assertEquals("/goals/g1/contributions/c2", ApiPaths.contribution("g1", "c2"))
+        assertEquals("/notifications/n1/read", ApiPaths.notificationRead("n1"))
+        assertEquals("/notifications/n1/unread", ApiPaths.notificationUnread("n1"))
         assertEquals("/goals/g1/contributions", ApiPaths.contribution("g1"))
     }
 
@@ -76,7 +77,7 @@ class ApiConfigTest {
     @Test
     fun `base url must not include the api prefix`() {
         assertThrows(IllegalArgumentException::class.java) {
-            ApiConfig(ApiEnvironment.STAGE, ApiMode.MOCK, "https://api.aram.test/api/v1", "1.0")
+            ApiConfig(ApiEnvironment.STAGE, ApiMode.MOCK, "https://api.aram.test/api", "1.0")
         }
     }
 

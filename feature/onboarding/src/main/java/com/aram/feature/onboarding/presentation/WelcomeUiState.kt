@@ -2,29 +2,52 @@ package com.aram.feature.onboarding.presentation
 
 import com.aram.core.designsystem.state.SubmitState
 
+enum class AuthScreen {
+    Welcome,
+    SignIn,
+    SignUp,
+}
+
+/** Alpha-only shortcut shown under the form; never populated in beta/production. */
+data class DemoCredentials(
+    val email: String,
+    val password: String,
+) {
+    val hint: String
+        get() = "Alpha demo · $email / $password"
+}
+
+enum class PasswordStrength { Empty, Weak, Fair, Strong }
+
 data class WelcomeUiState(
+    val screen: AuthScreen = AuthScreen.Welcome,
     val name: String = "",
     val email: String = "",
     val password: String = "",
     val passwordVisible: Boolean = false,
-    val acceptedTerms: Boolean = false,
+    val termsAccepted: Boolean = true,
     val submitState: SubmitState = SubmitState.Idle,
+    val fieldErrors: Map<String, String> = emptyMap(),
     val showNameError: Boolean = false,
-    val showEmailError: Boolean = false,
-    val showPasswordError: Boolean = false,
-    val showTermsError: Boolean = false,
 ) {
-    val passwordScore: Int = passwordStrengthScore(password)
+    val isSubmitting: Boolean
+        get() = submitState is SubmitState.Submitting
+
+    val passwordStrength: PasswordStrength
+        get() = strengthOf(password)
 }
 
-/** Mirrors the prototype's strength meter: 0 empty, 1 weak, 2 fair, 3 strong. */
-fun passwordStrengthScore(password: String): Int = when {
-    password.length >= 8 && password.any(Char::isDigit) && password.any(Char::isLetter) -> 3
-    password.length >= 6 -> 2
-    password.isNotEmpty() -> 1
-    else -> 0
+fun strengthOf(password: String): PasswordStrength {
+    if (password.isEmpty()) return PasswordStrength.Empty
+    val signals = listOf(
+        password.length >= 8,
+        password.length >= 12,
+        password.any { it.isLowerCase() } && password.any { it.isDigit() },
+        password.any { it.isUpperCase() } || password.any { !it.isLetterOrDigit() },
+    ).count { it }
+    return when {
+        signals <= 1 -> PasswordStrength.Weak
+        signals <= 3 -> PasswordStrength.Fair
+        else -> PasswordStrength.Strong
+    }
 }
-
-private val EmailPattern = Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}")
-
-internal fun isValidEmail(email: String): Boolean = EmailPattern.matches(email.trim())

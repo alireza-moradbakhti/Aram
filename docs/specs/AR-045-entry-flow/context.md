@@ -65,3 +65,20 @@
     set to the prototype's 31/32 ch width, onboarding orb clipped to a circle,
     tile shadow artifact replaced with a drawn glow, dashboard Income/Goal tiles
     switched to the prototype's wallet/target glyphs.
+
+## Merge with dev (AR-040 online auth), 2026-11-24
+
+- Dev gained the online sign-up / sign-in flow (AR-040) while this branch was
+  open. The integration keeps both: `EntryRoute` renders the AR-045 welcome and
+  three-step onboarding, then hands off to dev's `WelcomeRoute` (name → local
+  profile, plus "Create an online account" / "I already have an account").
+- AR-045's separate `CreateAccountScreen` is superseded by AR-040's
+  `AuthFormScreen` sign-up (same name/email/password/terms fields); its file was
+  moved aside, not merged, to avoid two competing forms.
+- Kept from this branch as `EntryWelcomeScreen` in `EntryWelcome.kt` so the
+  design welcome (hero card, points, Get started / I already have an account)
+  stays the first screen.
+- Re-applied the quoted `welcome_headline_prefix` fix (aapt trims the trailing
+  space otherwise).
+- Device smoke on emulator-5554 (Android 16): splash → welcome → onboarding
+  1–3 → account stage (name + auth links + demo hint) all render; `test` green.

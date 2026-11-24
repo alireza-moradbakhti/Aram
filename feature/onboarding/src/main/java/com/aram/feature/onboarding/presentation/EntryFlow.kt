@@ -50,50 +50,41 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.aram.core.designsystem.aramColors
 import com.aram.core.designsystem.component.AramBackground
 import com.aram.core.designsystem.icon.AramIcons
 import com.aram.feature.onboarding.R
 
-private enum class EntryStage { Welcome, Onboarding, CreateAccount }
+private enum class EntryStage { Welcome, Onboarding, Account }
 
 @Composable
 fun EntryRoute(
     modifier: Modifier = Modifier,
-    viewModel: WelcomeViewModel = hiltViewModel(),
+    demoCredentials: DemoCredentials? = null,
 ) {
     var stage by rememberSaveable { mutableStateOf(EntryStage.Welcome) }
     var onboardingStep by rememberSaveable { mutableIntStateOf(0) }
-    val context = LocalContext.current
-    val signInUnavailable = stringResource(R.string.welcome_sign_in_unavailable)
 
     when (stage) {
-        EntryStage.Welcome -> WelcomeScreen(
+        EntryStage.Welcome -> EntryWelcomeScreen(
             onGetStarted = {
                 onboardingStep = 0
                 stage = EntryStage.Onboarding
             },
-            onSignIn = {
-                Toast.makeText(context, signInUnavailable, Toast.LENGTH_SHORT).show()
-            },
+            onSignIn = { stage = EntryStage.Account },
             modifier = modifier,
         )
 
         EntryStage.Onboarding -> OnboardingScreen(
             step = onboardingStep,
             onStepChange = { onboardingStep = it },
-            onSkip = { stage = EntryStage.CreateAccount },
-            onDone = { stage = EntryStage.CreateAccount },
+            onSkip = { stage = EntryStage.Account },
+            onDone = { stage = EntryStage.Account },
             modifier = modifier,
         )
 
-        EntryStage.CreateAccount -> CreateAccountRoute(
-            viewModel = viewModel,
-            onBack = { stage = EntryStage.Welcome },
-            onLogIn = {
-                Toast.makeText(context, signInUnavailable, Toast.LENGTH_SHORT).show()
-            },
+        EntryStage.Account -> WelcomeRoute(
+            demoCredentials = demoCredentials,
             modifier = modifier,
         )
     }

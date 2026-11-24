@@ -1,14 +1,12 @@
 package com.aram.feature.transactions.presentation
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,48 +15,34 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aram.core.designsystem.AramTextStyles
 import com.aram.core.designsystem.AramTheme
 import com.aram.core.designsystem.aramColors
 import com.aram.core.designsystem.component.AramAppBar
-import com.aram.core.designsystem.component.AramFab
-import com.aram.core.designsystem.component.AramGlassButton
 import com.aram.core.designsystem.component.AramIconButton
 import com.aram.core.designsystem.component.AramMonthNav
 import com.aram.core.designsystem.component.AramPrimaryButton
@@ -66,227 +50,319 @@ import com.aram.core.designsystem.component.AramSegmented
 import com.aram.core.designsystem.component.GlassCard
 import com.aram.core.designsystem.component.MoneyLabel
 import com.aram.core.designsystem.icon.AramIcons
-import com.aram.core.designsystem.text.formatAmount
-import com.aram.core.designsystem.text.formatSignedAmount
-import java.time.LocalTime
+import com.aram.core.designsystem.text.formatMinor
+import com.aram.core.designsystem.text.formatSignedMinor
+import com.aram.core.model.SyncState
+import com.aram.core.model.SyncStatus
+import com.aram.core.money.CurrencyCode
+import java.time.Instant
+import java.time.LocalDate
 import java.time.YearMonth
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
-
-private data class DemoTransaction(
-    val id: Long,
-    val title: String,
-    val category: String,
-    val time: String,
-    val method: String,
-    val amount: Long,
-    val day: String,
-    val icon: ImageVector,
-)
-
-private val seedTransactions = listOf(
-    DemoTransaction(1, "Café Nima", "Food", "09:12", "Cash", -180_000, "Today · 12 Oct", AramIcons.cafe),
-    DemoTransaction(2, "Snapp ride", "Transport", "08:40", "Card", -240_000, "Today · 12 Oct", AramIcons.car),
-    DemoTransaction(3, "Salary", "Income", "08:00", "Melli", 85_000_000, "Today · 12 Oct", AramIcons.arrowIn),
-    DemoTransaction(4, "Grocery run", "Food", "18:20", "Card", -1_240_000, "Yesterday · 11 Oct", AramIcons.shoppingBag),
-    DemoTransaction(5, "Spotify", "Subscriptions", "12:00", "Auto-pay", -250_000, "Yesterday · 11 Oct", AramIcons.musicNote),
-    DemoTransaction(6, "Rent", "Housing", "10:00", "Transfer", -8_000_000, "10 Oct", AramIcons.home),
-)
-
-private val earlierTransactions = listOf(
-    DemoTransaction(7, "Pharmacy", "Health", "17:05", "Card", -320_000, "09 Oct", AramIcons.shoppingBag),
-    DemoTransaction(8, "Bonus", "Income", "09:00", "Melli", 5_000_000, "09 Oct", AramIcons.receipt),
-)
+import kotlin.math.abs
 
 @Composable
 fun TransactionsRoute(
+    onAddTransaction: () -> Unit,
     modifier: Modifier = Modifier,
-    requestAdd: Boolean = false,
-    onAddRequestConsumed: () -> Unit = {},
+    viewModel: TransactionsViewModel = hiltViewModel(),
 ) {
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
     TransactionsScreen(
+        state = state,
+        onPreviousMonth = viewModel::onPreviousMonth,
+        onNextMonth = viewModel::onNextMonth,
+        onScopeChange = viewModel::onScopeChange,
+        onAddTransaction = onAddTransaction,
+        onRefresh = viewModel::onRefresh,
+        onRetryQueued = viewModel::onRetryQueued,
         modifier = modifier,
-        requestAdd = requestAdd,
-        onAddRequestConsumed = onAddRequestConsumed,
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun TransactionsScreen(
+    state: TransactionsUiState,
+    onPreviousMonth: () -> Unit,
+    onNextMonth: () -> Unit,
+    onScopeChange: (TransactionScope) -> Unit,
+    onAddTransaction: () -> Unit,
+    onRefresh: () -> Unit,
+    onRetryQueued: () -> Unit = {},
     modifier: Modifier = Modifier,
-    requestAdd: Boolean = false,
-    onAddRequestConsumed: () -> Unit = {},
 ) {
-    var scopeIndex by rememberSaveable { mutableIntStateOf(0) }
-    var monthOffset by rememberSaveable { mutableIntStateOf(0) }
-    var showEarlier by rememberSaveable { mutableStateOf(false) }
-    var showSheet by rememberSaveable { mutableStateOf(false) }
-    val added = remember { mutableStateListOf<DemoTransaction>() }
-
-    LaunchedEffect(requestAdd) {
-        if (requestAdd) {
-            showSheet = true
-            onAddRequestConsumed()
+    val month = state.month
+    PullToRefreshBox(
+        isRefreshing = state.sync.status == SyncStatus.REFRESHING,
+        onRefresh = onRefresh,
+        modifier = modifier.fillMaxSize(),
+    ) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 88.dp),
+    ) {
+        item(key = "app-bar") {
+            Box(Modifier.padding(horizontal = 16.dp)) {
+                AramAppBar(title = "Activity") {
+                    AramIconButton(
+                        icon = AramIcons.search,
+                        contentDescription = "Search transactions",
+                        onClick = {},
+                    )
+                    AramIconButton(
+                        icon = AramIcons.filter,
+                        contentDescription = "Filter transactions",
+                        onClick = {},
+                    )
+                }
+            }
         }
-    }
 
-    val allTransactions = buildList {
-        addAll(added)
-        addAll(seedTransactions)
-        if (showEarlier) addAll(earlierTransactions)
-    }
-    val visible = when (scopeIndex) {
-        1 -> allTransactions.filter { it.amount < 0 }
-        2 -> allTransactions.filter { it.amount > 0 }
-        else -> allTransactions
-    }
-    val groups = LinkedHashMap<String, MutableList<DemoTransaction>>()
-    visible.forEach { transaction ->
-        groups.getOrPut(transaction.day) { mutableListOf() }.add(transaction)
-    }
-
-    val spent = allTransactions.filter { it.amount < 0 }.sumOf { -it.amount }
-    val income = allTransactions.filter { it.amount > 0 }.sumOf { it.amount }
-    val month = YearMonth.of(2026, 10).plusMonths(monthOffset.toLong())
-
-    Box(modifier = modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
-                .padding(top = 8.dp, bottom = 88.dp),
-        ) {
-            AramAppBar(title = "Activity") {
-                AramIconButton(
-                    icon = AramIcons.search,
-                    contentDescription = "Search transactions",
-                    onClick = {},
-                )
-                AramIconButton(
-                    icon = AramIcons.filter,
-                    contentDescription = "Filter transactions",
-                    onClick = {},
+        stickyHeader(key = "month") {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.background)
+                    .padding(horizontal = 16.dp),
+            ) {
+                AramMonthNav(
+                    title = "${month.month.getDisplayName(TextStyle.FULL, Locale.ENGLISH)} ${month.year}",
+                    subtitle = "${month.lengthOfMonth()} days · ${state.entryCount} entries",
+                    onPrevious = onPreviousMonth,
+                    onNext = onNextMonth,
                 )
             }
+        }
 
-            AramMonthNav(
-                title = "${month.month.getDisplayName(TextStyle.FULL, Locale.ENGLISH)} ${month.year}",
-                subtitle = "${month.lengthOfMonth()} days · ${allTransactions.size} entries",
-                onPrevious = { monthOffset -= 1 },
-                onNext = { monthOffset += 1 },
-            )
+        item(key = "scope") {
+            Box(Modifier.padding(horizontal = 16.dp)) {
+                AramSegmented(
+                    options = listOf("All", "Expenses", "Income"),
+                    selectedIndex = state.scope.ordinal,
+                    onSelect = { index -> onScopeChange(TransactionScope.entries[index]) },
+                )
+            }
+        }
 
-            AramSegmented(
-                options = listOf("All", "Expenses", "Income"),
-                selectedIndex = scopeIndex,
-                onSelect = { scopeIndex = it },
-            )
+        if (state.sync.status in SYNC_BANNER_STATUSES) {
+            item(key = "sync-banner") {
+                SyncBanner(
+                    state = state.sync,
+                    onRetry = onRefresh,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+            }
+        }
 
-            Spacer(Modifier.height(16.dp))
+        if (state.queueMessage() != null) {
+            item(key = "outbox-banner") {
+                OutboxBanner(
+                    message = state.queueMessage() ?: "",
+                    action = if (state.outbox.failed > 0) "Retry" else "Sync now",
+                    onAction = onRetryQueued,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+            }
+        }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        item(key = "stats") {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
                 ActivityStat(
                     label = "Spent",
-                    value = formatAmount(spent),
-                    delta = "6.4% under Sep",
+                    value = formatMinor(state.spentMinor, state.currency.fractionDigits),
+                    delta = spentDelta(state),
                     positive = false,
                     modifier = Modifier.weight(1f),
                 )
                 ActivityStat(
                     label = "Income",
-                    value = formatAmount(income),
-                    delta = "On time · 1st",
+                    value = formatMinor(state.incomeMinor, state.currency.fractionDigits),
+                    delta = incomeDelta(state),
                     positive = true,
                     modifier = Modifier.weight(1f),
                 )
             }
+        }
 
-            groups.forEach { (day, transactions) ->
-                val total = transactions.filter { it.amount < 0 }.sumOf { it.amount }
-                Column(Modifier.padding(top = 16.dp)) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 2.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(
-                            text = day.uppercase(),
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.SemiBold,
-                                letterSpacing = 0.9.sp,
-                            ),
-                            color = MaterialTheme.aramColors.textFaint,
-                        )
-                        Text(
-                            text = formatSignedAmount(total),
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.SemiBold,
-                                letterSpacing = 0.sp,
-                            ),
-                            color = MaterialTheme.aramColors.textDim,
-                        )
-                    }
-                    GlassCard(
-                        shape = RoundedCornerShape(22.dp),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                    ) {
-                        transactions.forEachIndexed { index, transaction ->
-                            TransactionRow(transaction, showDivider = index != transactions.lastIndex)
-                        }
-                    }
+        when {
+            state.loading -> item(key = "loading") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 48.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            state.isEmpty -> item(key = "empty") {
+                EmptyLedger(
+                    state = state,
+                    onAddTransaction = onAddTransaction,
+                )
+            }
 
-            if (!showEarlier) {
-                AramGlassButton(
-                    text = "Load earlier entries",
-                    onClick = { showEarlier = true },
-                    modifier = Modifier.fillMaxWidth(),
+            else -> items(state.groups, key = { group -> group.date.toEpochDay() }) { group ->
+                DayGroup(
+                    group = group,
+                    today = state.today,
+                    fractionDigits = state.currency.fractionDigits,
+                    modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
         }
-
-        AramFab(
-            onClick = { showSheet = true },
-            contentDescription = "Add expense",
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 20.dp, bottom = 16.dp),
-        )
     }
+    }
+}
 
-    if (showSheet) {
-        AddExpenseSheet(
-            onDismiss = { showSheet = false },
-            onSave = { amount, category, note ->
-                val time = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
-                added.add(
-                    0,
-                    DemoTransaction(
-                        id = System.currentTimeMillis(),
-                        title = note.ifBlank { "$category expense" },
-                        category = category,
-                        time = time,
-                        method = "Cash",
-                        amount = -amount,
-                        day = "Today · 12 Oct",
-                        icon = categoryIcon(category),
-                    ),
+private val SYNC_BANNER_STATUSES = setOf(
+    SyncStatus.OFFLINE,
+    SyncStatus.STALE,
+    SyncStatus.FAILED,
+)
+
+@Composable
+private fun SyncBanner(
+    state: SyncState,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = MaterialTheme.aramColors
+    val message = when (state.status) {
+        SyncStatus.OFFLINE -> "You're offline · showing saved transactions"
+        SyncStatus.FAILED -> "Couldn't refresh · showing saved transactions"
+        else -> {
+            val time = state.lastSyncedAtMillis?.let {
+                SYNC_TIME_FORMAT.format(Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()))
+            }
+            if (time == null) "Couldn't refresh · showing saved transactions"
+            else "Couldn't refresh · synced $time"
+        }
+    }
+    GlassCard(
+        shape = RoundedCornerShape(16.dp),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.labelMedium,
+                color = colors.textDim,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onRetry) {
+                Text(
+                    text = "Retry",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                 )
-                showSheet = false
-            },
-        )
+            }
+        }
+    }
+}
+
+private val SYNC_TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.US)
+
+private fun TransactionsUiState.queueMessage(): String? = when {
+    outbox.failed == 1 -> "1 change couldn't sync"
+    outbox.failed > 1 -> "${outbox.failed} changes couldn't sync"
+    outbox.pending == 1 -> "1 change waiting to sync"
+    outbox.pending > 1 -> "${outbox.pending} changes waiting to sync"
+    else -> null
+}
+
+@Composable
+private fun OutboxBanner(
+    message: String,
+    action: String,
+    onAction: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = MaterialTheme.aramColors
+    GlassCard(
+        shape = RoundedCornerShape(16.dp),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = "$message · saved on this device",
+                style = MaterialTheme.typography.labelMedium,
+                color = colors.textDim,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onAction) {
+                Text(
+                    text = action,
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DayGroup(
+    group: DayGroupUi,
+    today: LocalDate,
+    fractionDigits: Int,
+    modifier: Modifier = Modifier,
+) {
+    val colors = MaterialTheme.aramColors
+    Column(modifier.padding(top = 16.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 2.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = dayLabel(group.date, today),
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.9.sp,
+                ),
+                color = colors.textFaint,
+            )
+            Text(
+                text = formatSignedMinor(group.totalMinor, fractionDigits),
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.sp,
+                ),
+                color = colors.textDim,
+            )
+        }
+        GlassCard(
+            shape = RoundedCornerShape(22.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+        ) {
+            group.transactions.forEachIndexed { index, transaction ->
+                TransactionRow(transaction, showDivider = index != group.transactions.lastIndex)
+            }
+        }
     }
 }
 
 @Composable
 private fun TransactionRow(
-    transaction: DemoTransaction,
+    transaction: TransactionRowUi,
     showDivider: Boolean,
 ) {
     val colors = MaterialTheme.aramColors
@@ -306,7 +382,7 @@ private fun TransactionRow(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = transaction.icon,
+                    imageVector = categoryIcon(transaction.categoryIconKey),
                     contentDescription = null,
                     tint = colors.textDim,
                     modifier = Modifier.size(18.dp),
@@ -321,18 +397,88 @@ private fun TransactionRow(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = "${transaction.category} · ${transaction.time} · ${transaction.method}",
+                    text = transaction.detail,
                     style = MaterialTheme.typography.bodySmall.copy(letterSpacing = 0.sp),
                     color = colors.textFaint,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            MoneyLabel(amount = transaction.amount, incoming = transaction.amount > 0)
+            Column(horizontalAlignment = Alignment.End) {
+                MoneyLabel(
+                    amount = transaction.amountMinor,
+                    incoming = transaction.incoming,
+                    fractionDigits = transaction.fractionDigits,
+                )
+                if (transaction.pendingSync) {
+                    Text(
+                        text = "Queued",
+                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.sp),
+                        color = colors.textFaint,
+                    )
+                }
+            }
         }
         if (showDivider) {
             HorizontalDivider(color = colors.border, thickness = 1.dp)
         }
+    }
+}
+
+@Composable
+private fun EmptyLedger(
+    state: TransactionsUiState,
+    onAddTransaction: () -> Unit,
+) {
+    val colors = MaterialTheme.aramColors
+    val monthName = state.month.month.getDisplayName(TextStyle.FULL, Locale.ENGLISH)
+    val (title, message) = when (state.scope) {
+        TransactionScope.ALL -> "Nothing in $monthName yet" to
+            "Add your first expense or income and it will show up here instantly."
+        TransactionScope.EXPENSES -> "No expenses in $monthName" to
+            "Spending you add this month will show up here."
+        TransactionScope.INCOME -> "No income in $monthName" to
+            "Income you add this month will show up here."
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 48.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(colors.surface2)
+                .border(1.dp, colors.border, RoundedCornerShape(18.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = AramIcons.receipt,
+                contentDescription = null,
+                tint = colors.textDim,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.textFaint,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(6.dp))
+        AramPrimaryButton(
+            text = "Add transaction",
+            onClick = onAddTransaction,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
@@ -369,336 +515,125 @@ private fun ActivityStat(
     }
 }
 
-@Composable
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-private fun AddExpenseSheet(
-    onDismiss: () -> Unit,
-    onSave: (amount: Long, category: String, note: String) -> Unit,
-) {
-    var amountDigits by rememberSaveable { mutableStateOf("180000") }
-    var category by rememberSaveable { mutableStateOf("Food") }
-    var note by rememberSaveable { mutableStateOf("") }
-    val parsedAmount = amountDigits.toLongOrNull() ?: 0L
-    val colors = MaterialTheme.aramColors
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val amountInteraction = remember { MutableInteractionSource() }
-    val amountFocused by amountInteraction.collectIsFocusedAsState()
-    val fxPreview = remember(parsedAmount) {
-        val cents = (parsedAmount * 100 + IRR_PER_USD / 2) / IRR_PER_USD
-        "$${cents / 100}.${(cents % 100).toString().padStart(2, '0')}"
-    }
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
-        dragHandle = {
-            Box(
-                modifier = Modifier
-                    .padding(top = 10.dp, bottom = 6.dp)
-                    .size(width = 40.dp, height = 4.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(colors.borderStrong),
-            )
-        },
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 24.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(text = "Add expense", style = MaterialTheme.typography.titleMedium)
-                AramIconButton(
-                    icon = AramIcons.close,
-                    contentDescription = "Close",
-                    onClick = onDismiss,
-                )
-            }
-
-            Spacer(Modifier.height(12.dp))
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 2.dp)
-                    .padding(bottom = 8.dp),
-            ) {
-                Text(
-                    text = "AMOUNT",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 0.9.sp,
-                    ),
-                    color = colors.textFaint,
-                )
-                Row(verticalAlignment = Alignment.Bottom) {
-                    BasicTextField(
-                        value = if (amountDigits.isEmpty()) "" else formatAmount(parsedAmount),
-                        onValueChange = { input ->
-                            amountDigits = input.filter { it.isDigit() }.take(12).trimStart('0')
-                        },
-                        textStyle = AramTextStyles.heroAmountCompact.copy(
-                            fontSize = 34.sp,
-                            lineHeight = 40.sp,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        ),
-                        singleLine = true,
-                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                        interactionSource = amountInteraction,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(vertical = 2.dp),
-                    )
-                    Text(
-                        text = "IRR",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = colors.textFaint,
-                        modifier = Modifier.padding(start = 8.dp, bottom = 10.dp),
-                    )
-                }
-            }
-
-            HorizontalDivider(
-                color = if (amountFocused) MaterialTheme.colorScheme.primary else colors.border,
-                thickness = 1.dp,
-            )
-
-            Spacer(Modifier.height(6.dp))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 2.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = buildAnnotatedString {
-                        withStyle(SpanStyle(color = colors.textDim)) { append("≈ ") }
-                        withStyle(
-                            SpanStyle(
-                                color = MaterialTheme.colorScheme.onSurface,
-                                fontWeight = FontWeight.SemiBold,
-                            ),
-                        ) { append(fxPreview) }
-                    },
-                    style = MaterialTheme.typography.labelMedium,
-                )
-                Text(
-                    text = "Rate locked at 1,042,000 IRR on save",
-                    style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.sp),
-                    color = colors.textFaint,
-                )
-            }
-
-            Spacer(Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 2.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                categoryOptions.forEach { (label, icon) ->
-                    CategoryChip(
-                        label = label,
-                        icon = icon,
-                        selected = label == category,
-                        onClick = { category = label },
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(14.dp))
-
-            val timeNow = remember { LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm")) }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MetaRow(
-                    icon = AramIcons.card,
-                    label = "Cash",
-                    value = "Melli",
-                    modifier = Modifier.weight(1f),
-                )
-                MetaRow(
-                    icon = AramIcons.calendar,
-                    label = "Today",
-                    value = timeNow,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            Column(Modifier.fillMaxWidth()) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "Note",
-                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                        color = colors.textDim,
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        text = "(optional)",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Normal,
-                            letterSpacing = 0.sp,
-                        ),
-                        color = colors.textFaint,
-                    )
-                }
-                Spacer(Modifier.height(6.dp))
-                BasicTextField(
-                    value = note,
-                    onValueChange = { note = it.take(80) },
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        color = MaterialTheme.colorScheme.onSurface,
-                    ),
-                    singleLine = true,
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    decorationBox = { innerTextField ->
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(colors.surface1)
-                                .border(1.dp, colors.border, RoundedCornerShape(14.dp))
-                                .padding(horizontal = 16.dp),
-                            contentAlignment = Alignment.CenterStart,
-                        ) {
-                            if (note.isEmpty()) {
-                                Text(
-                                    text = "Coffee with Nima",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = colors.textFaint,
-                                )
-                            }
-                            innerTextField()
-                        }
-                    },
-                )
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            AramPrimaryButton(
-                text = "Save expense",
-                onClick = { onSave(parsedAmount, category, note) },
-                enabled = parsedAmount > 0,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
+private fun spentDelta(state: TransactionsUiState): String {
+    val previous = state.previousSpentMinor ?: return "No spend last month"
+    val previousLabel = state.month
+        .minusMonths(1)
+        .month
+        .getDisplayName(TextStyle.SHORT, Locale.ENGLISH)
+    if (previous <= 0) return "No spend last month"
+    val change = (previous - state.spentMinor) * 100.0 / previous
+    return when {
+        abs(change) < 0.05 -> "On par with $previousLabel"
+        change > 0 -> "${oneDecimal(change)}% under $previousLabel"
+        else -> "${oneDecimal(-change)}% over $previousLabel"
     }
 }
 
-private const val IRR_PER_USD = 1_042_000L
+private fun incomeDelta(state: TransactionsUiState): String = when (state.incomeCount) {
+    0 -> "No income yet"
+    1 -> "1 entry"
+    else -> "${state.incomeCount} entries"
+}
 
-private val categoryOptions = listOf(
-    "Food" to AramIcons.cafe,
-    "Transport" to AramIcons.car,
-    "Bills" to AramIcons.receipt,
-    "Shopping" to AramIcons.shoppingBag,
-    "Fun" to AramIcons.smile,
-)
+private fun oneDecimal(value: Double): String = String.format(Locale.US, "%.1f", value)
 
-@Composable
-private fun CategoryChip(
-    label: String,
-    icon: ImageVector,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    val colors = MaterialTheme.aramColors
-    Row(
-        modifier = Modifier
-            .height(38.dp)
-            .clip(CircleShape)
-            .background(if (selected) colors.successSoft else colors.surface1)
-            .border(1.dp, if (selected) Color(0x470E9F6E) else colors.border, CircleShape)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = if (selected) colors.primaryHi else colors.textFaint,
-            modifier = Modifier.size(15.dp),
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.sp),
-            color = if (selected) colors.primaryHi else colors.textDim,
-        )
+private fun dayLabel(date: LocalDate, today: LocalDate): String {
+    val formatted = "${date.dayOfMonth} " +
+        date.month.getDisplayName(TextStyle.SHORT, Locale.ENGLISH).uppercase(Locale.ENGLISH)
+    return when (date) {
+        today -> "TODAY · $formatted"
+        today.minusDays(1) -> "YESTERDAY · $formatted"
+        else -> formatted
     }
 }
 
-@Composable
-private fun MetaRow(
-    icon: ImageVector,
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier,
-) {
-    val colors = MaterialTheme.aramColors
-    Row(
-        modifier = modifier
-            .height(46.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(colors.surface1)
-            .border(1.dp, colors.border, RoundedCornerShape(14.dp))
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = colors.textFaint,
-            modifier = Modifier.size(15.dp),
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall.copy(
-                fontWeight = FontWeight.Medium,
-                letterSpacing = 0.sp,
+private fun previewState(scope: TransactionScope = TransactionScope.ALL): TransactionsUiState {
+    val today = LocalDate.of(2026, 10, 12)
+    fun row(id: String, title: String, detail: String, iconKey: String?, amount: Long, incoming: Boolean) =
+        TransactionRowUi(id, title, detail, iconKey, amount, 0, incoming)
+    val groups = listOf(
+        DayGroupUi(
+            date = today,
+            totalMinor = -420_000,
+            transactions = listOf(
+                row("1", "Café Nima", "Food · 09:12 · Cash", "food", -180_000, false),
+                row("2", "Snapp ride", "Transport · 08:40 · Card", "transport", -240_000, false),
+                row("3", "Salary", "Income · 08:00 · Melli", "salary", 85_000_000, true),
             ),
-            color = colors.textDim,
-        )
-        Spacer(Modifier.weight(1f))
-        Text(
-            text = value,
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 0.sp,
+        ),
+        DayGroupUi(
+            date = today.minusDays(1),
+            totalMinor = -1_490_000,
+            transactions = listOf(
+                row("4", "Grocery run", "Food · 18:20 · Card", "groceries", -1_240_000, false),
+                row("5", "Spotify", "Subscriptions · 12:00 · Auto-pay", "subscriptions", -250_000, false),
             ),
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-    }
-}
-
-private fun categoryIcon(category: String): ImageVector = when (category) {
-    "Transport" -> AramIcons.car
-    "Bills" -> AramIcons.receipt
-    "Shopping" -> AramIcons.shoppingBag
-    "Fun" -> AramIcons.smile
-    else -> AramIcons.cafe
+        ),
+    )
+    return TransactionsUiState(
+        month = YearMonth.of(2026, 10),
+        today = today,
+        scope = scope,
+        loading = false,
+        currency = CurrencyCode.IRR,
+        groups = groups,
+        entryCount = 5,
+        spentMinor = 1_910_000,
+        incomeMinor = 85_000_000,
+        incomeCount = 1,
+        previousSpentMinor = 2_040_000,
+    )
 }
 
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
-private fun TransactionsScreenPreview() {
-    AramTheme {
-        TransactionsScreen()
+private fun TransactionsScreenDarkPreview() {
+    AramTheme(darkTheme = true) {
+        TransactionsScreen(
+            state = previewState(),
+            onPreviousMonth = {},
+            onNextMonth = {},
+            onScopeChange = {},
+            onAddTransaction = {},
+            onRefresh = {},
+        )
+    }
+}
+
+@Preview(showBackground = true, showSystemUi = true)
+@Composable
+private fun TransactionsScreenLightPreview() {
+    AramTheme(darkTheme = false) {
+        TransactionsScreen(
+            state = previewState(),
+            onPreviousMonth = {},
+            onNextMonth = {},
+            onScopeChange = {},
+            onAddTransaction = {},
+            onRefresh = {},
+        )
+    }
+}
+
+@Preview(showBackground = true, showSystemUi = true)
+@Composable
+private fun TransactionsScreenEmptyPreview() {
+    AramTheme(darkTheme = true) {
+        TransactionsScreen(
+            state = previewState().copy(
+                groups = emptyList(),
+                entryCount = 0,
+                spentMinor = 0,
+                incomeMinor = 0,
+                incomeCount = 0,
+                previousSpentMinor = null,
+            ),
+            onPreviousMonth = {},
+            onNextMonth = {},
+            onScopeChange = {},
+            onAddTransaction = {},
+            onRefresh = {},
+        )
     }
 }
