@@ -14,15 +14,26 @@ import com.aram.app.navigation.AramApp
 import com.aram.app.session.MainViewModel
 import com.aram.core.designsystem.AramTheme
 import com.aram.core.designsystem.state.UiState
+import com.aram.core.network.config.ApiMode
+import com.aram.core.network.mock.MockDemoAccount
+import com.aram.core.network.mock.MockScenarioController
+import com.aram.feature.onboarding.presentation.DemoCredentials
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
 
+    @Inject
+    lateinit var mockScenarios: MockScenarioController
+
     private lateinit var crashMarker: CrashMarker
     private var showRecovery = false
+
+    private val isMockBuild: Boolean
+        get() = BuildConfig.API_MODE == ApiMode.MOCK.name
 
     override fun onCreate(savedInstanceState: Bundle?) {
         crashMarker = CrashMarker(this)
@@ -47,11 +58,19 @@ class MainActivity : ComponentActivity() {
                     )
                 } else {
                     val session by viewModel.session.collectAsStateWithLifecycle()
+                    val scenario by mockScenarios.scenario.collectAsStateWithLifecycle()
                     AramApp(
                         sessionState = session,
                         onRetrySession = viewModel::retry,
                         onSignOut = viewModel::signOut,
                         showDebugActions = BuildConfig.DEBUG,
+                        debugScenario = scenario.takeIf { BuildConfig.DEBUG && isMockBuild },
+                        onSelectDebugScenario = mockScenarios::select,
+                        demoCredentials = if (isMockBuild) {
+                            DemoCredentials(MockDemoAccount.EMAIL, MockDemoAccount.PASSWORD)
+                        } else {
+                            null
+                        },
                     )
                 }
             }

@@ -18,4 +18,7 @@ interface RecurringRuleDao {
             "AND deletedAt IS NULL ORDER BY nextDueEpochDay ASC",
     )
     fun observeActive(userId: String): Flow<List<RecurringRuleEntity>>
+
+    @Query("DELETE FROM recurring_rules WHERE userId = :userId")
+    suspend fun deleteByUser(userId: String)
 }

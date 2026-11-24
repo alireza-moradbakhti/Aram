@@ -1,8 +1,8 @@
 package com.aram.core.network.config
 
 /**
- * The only place that knows the `/api/v1` prefix. Callers pass relative paths
- * such as [ApiPaths.AUTH_LOGIN].
+ * The only place that knows the `/api` prefix. Callers pass relative paths such
+ * as [ApiPaths.AUTH_LOGIN].
  */
 class EndpointProvider(private val config: ApiConfig) {
 
@@ -12,32 +12,60 @@ class EndpointProvider(private val config: ApiConfig) {
     }
 
     private companion object {
-        const val API_PREFIX = "/api/v1"
+        const val API_PREFIX = "/api"
     }
 }
 
-/** Relative paths from the contract; the version prefix is added by [EndpointProvider]. */
+/** Paths from the Aram API; the `/api` prefix is added by [EndpointProvider]. */
 object ApiPaths {
     const val AUTH_REGISTER = "/auth/register"
     const val AUTH_LOGIN = "/auth/login"
-    const val AUTH_REFRESH = "/auth/refresh"
-    const val AUTH_LOGOUT = "/auth/logout"
-    const val ME = "/me"
-    const val ACCOUNTS = "/accounts"
+    const val AUTH_FORGOT_PASSWORD = "/auth/forgot-password"
+    const val AUTH_RESET_PASSWORD = "/auth/reset-password"
+    const val AUTH_CHANGE_PASSWORD = "/auth/change-password"
+    const val ME = "/auth/me"
+    const val PROFILE = "/auth/profile"
+    const val ACCOUNT = "/auth/account"
+
+    const val PROFILE_STATS = "/profile/stats"
+    const val PROFILE_ACCOUNTS = "/profile/accounts"
+    const val PROFILE_EXPORT = "/profile/export"
+
     const val CATEGORIES = "/categories"
     const val TRANSACTIONS = "/transactions"
+    const val TRANSACTIONS_SUMMARY = "/transactions/summary"
+    const val TRANSACTIONS_INSIGHTS_WEEKLY = "/transactions/insights/weekly"
+
     const val BUDGETS = "/budgets"
+    const val BUDGETS_OVERVIEW = "/budgets/overview"
+    const val BUDGETS_CATEGORIES = "/budgets/categories"
+
     const val GOALS = "/goals"
-    const val SYNC = "/sync"
+
+    const val NOTIFICATIONS = "/notifications"
+    const val NOTIFICATIONS_READ_ALL = "/notifications/read-all"
+
+    const val DASHBOARD = "/dashboard"
+
+    const val SETTINGS = "/settings"
+    const val SETTINGS_CURRENCIES = "/settings/currencies"
+    const val SETTINGS_LOCALES = "/settings/locales"
+    const val SETTINGS_CONVERT = "/settings/convert"
+    const val RATES = "/rates"
+
     const val SYNC_PUSH = "/sync/push"
+    const val SYNC_PULL = "/sync/pull"
+
+    const val HEALTH = "/health"
 
     fun byId(collection: String, id: String): String =
         "$collection/${encode(id)}"
 
-    fun contribution(goalId: String, contributionId: String? = null): String {
-        val base = "${GOALS}/${encode(goalId)}/contributions"
-        return if (contributionId == null) base else "$base/${encode(contributionId)}"
-    }
+    fun notificationRead(id: String): String = "${NOTIFICATIONS}/${encode(id)}/read"
+
+    fun notificationUnread(id: String): String = "${NOTIFICATIONS}/${encode(id)}/unread"
+
+    fun contribution(goalId: String): String = "${GOALS}/${encode(goalId)}/contributions"
 
     private fun encode(value: String): String = buildString {
         for (char in value) {

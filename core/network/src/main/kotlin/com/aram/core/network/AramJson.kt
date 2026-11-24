@@ -1,17 +1,14 @@
 package com.aram.core.network
 
-import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonNamingStrategy
 
 /**
- * The contract is snake_case and additive, so unknown keys are ignored and
- * absent values stay absent. One instance is shared by the client and tests.
+ * The Aram API speaks camelCase and follows the ASP.NET Core defaults: unknown
+ * keys are ignored, absent nullable values are omitted on encode, and dates are
+ * ISO-8601 strings. One instance is shared by the client, the mock and tests.
  */
-@OptIn(ExperimentalSerializationApi::class)
 val AramJson: Json = Json {
     ignoreUnknownKeys = true
     explicitNulls = false
-    namingStrategy = JsonNamingStrategy.SnakeCase
-    encodeDefaults = true
+    encodeDefaults = false
 }

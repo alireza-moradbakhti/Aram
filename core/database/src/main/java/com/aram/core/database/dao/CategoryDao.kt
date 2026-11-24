@@ -19,6 +19,24 @@ interface CategoryDao {
     )
     fun observeByUser(userId: String): Flow<List<CategoryEntity>>
 
+    @Query(
+        "SELECT * FROM categories WHERE userId = :userId AND id = :id " +
+            "AND deletedAt IS NULL",
+    )
+    suspend fun findById(userId: String, id: String): CategoryEntity?
+
     @Query("SELECT COUNT(*) FROM categories WHERE userId = :userId AND deletedAt IS NULL")
     suspend fun countByUser(userId: String): Int
+
+    /** Drops local-only categories (e.g. the offline seed) once the server list is in. */
+    @Query(
+        "UPDATE categories SET deletedAt = :deletedAt, updatedAt = :deletedAt " +
+            "WHERE userId = :userId AND deletedAt IS NULL AND id NOT IN (:keepIds) " +
+            "AND NOT EXISTS (SELECT 1 FROM transactions t " +
+            "WHERE t.categoryId = categories.id AND t.deletedAt IS NULL)",
+    )
+    suspend fun softDeleteOrphans(userId: String, keepIds: List<String>, deletedAt: Long): Int
+
+    @Query("DELETE FROM categories WHERE userId = :userId")
+    suspend fun deleteByUser(userId: String)
 }

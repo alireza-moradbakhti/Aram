@@ -10,11 +10,10 @@ import com.aram.core.network.config.ApiMode
 import com.aram.core.network.http.AramHttpClient
 import com.aram.core.network.http.TokenProvider
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.HttpClientEngine
 import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
 import io.ktor.http.headersOf
-import kotlinx.coroutines.CompletableDeferred
 
 internal val testConfig = ApiConfig(
     environment = ApiEnvironment.STAGE,
@@ -33,7 +32,7 @@ internal fun recordingLogger(): Pair<Logger, MutableList<String>> {
 }
 
 internal fun clientFor(
-    engine: MockEngine,
+    engine: HttpClientEngine,
     tokens: TokenProvider = TokenProvider.None,
 ): HttpClient = AramHttpClient.create(testConfig, engine, tokens)
 
@@ -43,17 +42,11 @@ internal fun jsonHeaders(): Headers =
 internal class FakeTokens(initial: String? = "token-1") : TokenProvider {
 
     var token: String? = initial
-    var refreshCount = 0
-    var refreshWaitsFor: CompletableDeferred<Unit>? = null
-    var refreshSucceeds = true
+    var unauthorizedCount = 0
 
     override suspend fun accessToken(): String? = token
 
-    override suspend fun refresh(): Boolean {
-        refreshCount++
-        refreshWaitsFor?.await()
-        if (!refreshSucceeds) return false
-        token = "token-${refreshCount + 1}"
-        return true
+    override suspend fun onUnauthorized() {
+        unauthorizedCount++
     }
 }

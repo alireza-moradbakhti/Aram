@@ -1,22 +1,18 @@
 package com.aram.core.network
 
-import com.aram.core.network.dto.AccountDto
 import com.aram.core.network.dto.AuthResponseDto
-import com.aram.core.network.dto.BudgetDto
-import com.aram.core.network.dto.CategoryDto
-import com.aram.core.network.dto.DataEnvelope
-import com.aram.core.network.dto.ErrorEnvelope
-import com.aram.core.network.dto.GoalContributionDto
-import com.aram.core.network.dto.GoalDto
-import com.aram.core.network.dto.PatchMeRequest
-import com.aram.core.network.dto.PushEnvelope
-import com.aram.core.network.dto.SyncEnvelope
+import com.aram.core.network.dto.ResultEnvelope
+import com.aram.core.network.dto.SaveTransactionRequest
+import com.aram.core.network.dto.SyncPullDto
+import com.aram.core.network.dto.SyncPushRequest
+import com.aram.core.network.dto.SyncPushResultDto
+import com.aram.core.network.dto.SyncTransactionItem
 import com.aram.core.network.dto.TransactionDto
-import com.aram.core.network.dto.UserDto
+import com.aram.core.network.dto.TransactionListDto
+import com.aram.core.network.dto.ValidationErrorEnvelope
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -24,181 +20,175 @@ import org.junit.Test
 class DtoSerializationTest {
 
     @Test
-    fun `user fixture parses snake case fields`() {
-        val envelope = AramJson.decodeFromString<DataEnvelope<UserDto>>(
+    fun `result envelope parses camelCase and ignores unknown fields`() {
+        val envelope = AramJson.decodeFromString<ResultEnvelope<AuthResponseDto>>(
             """
             {
+              "isSuccess": true,
+              "message": "",
+              "errors": [],
               "data": {
-                "id": "8f14e45f-ea0f-4b0c-9d9a-1c6f4c9a8b11",
-                "email": "demo@aram.app",
-                "display_name": "Demo",
-                "default_currency": "USD",
-                "calendar_system": "GREGORIAN",
-                "created_at": 1763500000000,
-                "updated_at": 1763500000001,
-                "unexpected_field": true
-              },
-              "meta": { "server_time": 1763500000123 }
+                "token": "jwt-token",
+                "expiresAtUtc": "2026-11-22T10:15:30Z",
+                "profile": {
+                  "id": "u1",
+                  "displayName": "Ava Bennett",
+                  "firstName": "Ava",
+                  "email": "demo@aram.app",
+                  "avatarInitials": "AB",
+                  "homeCurrency": "IRR",
+                  "unexpectedField": true
+                }
+              }
             }
             """.trimIndent(),
         )
-        assertEquals("Demo", envelope.data.displayName)
-        assertEquals("USD", envelope.data.defaultCurrency)
-        assertEquals(1763500000123, envelope.meta?.serverTime)
-        assertNull(envelope.meta?.nextCursor)
+        assertTrue(envelope.isSuccess)
+        val data = requireNotNull(envelope.data)
+        assertEquals("jwt-token", data.token)
+        assertEquals("2026-11-22T10:15:30Z", data.expiresAtUtc)
+        assertEquals("Ava Bennett", data.profile.displayName)
+        assertEquals("system", data.profile.appearance)
     }
 
     @Test
-    fun `account fixture parses and keeps tombstones`() {
-        val account = AramJson.decodeFromString<AccountDto>(
+    fun `validation envelope keeps per-field messages`() {
+        val envelope = AramJson.decodeFromString<ValidationErrorEnvelope>(
             """
             {
-              "id": "acc-1", "name": "Cash", "type": "CASH",
-              "currency_code": "USD", "opening_balance_minor": 125000,
-              "color_argb": -16711936, "icon_key": "wallet", "sort_order": 1,
-              "archived": false, "created_at": 1, "updated_at": 2, "deleted_at": 3
+              "statusCode": 400,
+              "message": "Validation failed.",
+              "errors": { "email": ["Email is required.", "Email is invalid."] }
             }
             """.trimIndent(),
         )
-        assertEquals("CASH", account.type)
-        assertEquals(125000L, account.openingBalanceMinor)
-        assertEquals(3L, account.deletedAt)
+        assertEquals(400, envelope.statusCode)
+        assertEquals("Email is required.", envelope.errors?.get("email")?.first())
     }
 
     @Test
-    fun `transaction fixture parses`() {
+    fun `transaction parses irr amounts and entered currency`() {
         val tx = AramJson.decodeFromString<TransactionDto>(
             """
             {
-              "id": "t-1", "account_id": "acc-1", "category_id": null,
-              "type": "TRANSFER", "amount_minor": 2500, "currency_code": "USD",
-              "occurred_at": 1763500000000, "note": "rent",
-              "transfer_group_id": "g-1", "recurring_rule_id": null
+              "id": "t1",
+              "kind": "expense",
+              "amountIrr": 10420000.0,
+              "category": {
+                "id": "c1", "slug": "groceries", "name": "Groceries",
+                "iconKey": "cart", "tone": "positive", "kind": "expense"
+              },
+              "account": { "id": "a1", "name": "Everyday", "institution": "Bank", "kind": "bank" },
+              "note": "Weekly shop",
+              "occurredAt": "2026-11-20T08:05:00Z",
+              "enteredCurrency": "USD",
+              "enteredAmount": 10.0,
+              "fxRate": 1042000.0
             }
             """.trimIndent(),
         )
-        assertEquals("TRANSFER", tx.type)
-        assertEquals(2500L, tx.amountMinor)
-        assertEquals("g-1", tx.transferGroupId)
-        assertNull(tx.categoryId)
+        assertEquals("groceries", tx.category.slug)
+        assertEquals(10_420_000.0, tx.amountIrr, 0.001)
+        assertEquals(10.0, requireNotNull(tx.enteredAmount), 0.001)
+        assertEquals("Everyday", tx.account?.name)
+        assertEquals("2026-11-20T08:05:00Z", tx.occurredAt)
     }
 
     @Test
-    fun `budget goal and contribution fixtures parse`() {
-        val budget = AramJson.decodeFromString<BudgetDto>(
-            """{"id":"b1","category_id":"c1","period_start_epoch_day":20690,"limit_minor":50000,"currency_code":"USD"}""",
-        )
-        assertEquals(20690L, budget.periodStartEpochDay)
-
-        val goal = AramJson.decodeFromString<GoalDto>(
-            """{"id":"g1","name":"Trip","target_minor":100000,"currency_code":"USD","deadline_epoch_day":21000,"status":"ACTIVE"}""",
-        )
-        assertEquals("ACTIVE", goal.status)
-
-        val contribution = AramJson.decodeFromString<GoalContributionDto>(
-            """{"id":"gc1","goal_id":"g1","amount_minor":1000,"occurred_at":1763500000000}""",
-        )
-        assertEquals("g1", contribution.goalId)
-    }
-
-    @Test
-    fun `category fixture parses`() {
-        val category = AramJson.decodeFromString<CategoryDto>(
-            """{"id":"c1","name":"Food","kind":"EXPENSE","parent_id":"p1","color_argb":1,"icon_key":"food"}""",
-        )
-        assertEquals("EXPENSE", category.kind)
-        assertEquals("p1", category.parentId)
-    }
-
-    @Test
-    fun `error envelope exposes fields and the canonical row`() {
-        val envelope = AramJson.decodeFromString<ErrorEnvelope>(
+    fun `transaction list parses day groups and paging`() {
+        val list = AramJson.decodeFromString<TransactionListDto>(
             """
             {
-              "error": {
-                "code": "conflict",
-                "message": "stale row",
-                "fields": { "amount_minor": "must be positive" },
-                "request_id": "req_123",
-                "details": { "current": { "id": "t-1", "updated_at": 5 } }
+              "year": 2026, "month": 11, "page": 1, "pageSize": 50,
+              "totalCount": 1, "totalPages": 1,
+              "totalSpentIrr": 10420000.0, "totalIncomeIrr": 0.0, "spentDeltaPercent": -4.5,
+              "groups": [{
+                "date": "2026-11-20", "label": "Yesterday", "totalIrr": 10420000.0,
+                "items": [{
+                  "id": "t1", "kind": "expense", "amountIrr": 10420000.0,
+                  "category": {
+                    "id": "c1", "slug": "groceries", "name": "Groceries",
+                    "iconKey": "cart", "tone": "positive", "kind": "expense"
+                  },
+                  "occurredAt": "2026-11-20T08:05:00Z"
+                }]
+              }]
+            }
+            """.trimIndent(),
+        )
+        assertEquals(1, list.groups.single().items.size)
+        assertEquals("Yesterday", list.groups.single().label)
+        assertEquals("IRR", list.groups.single().items.single().enteredCurrency)
+        assertNull(list.groups.single().items.single().account)
+    }
+
+    @Test
+    fun `sync pull parses transactions budgets goals and settings`() {
+        val pull = AramJson.decodeFromString<SyncPullDto>(
+            """
+            {
+              "serverTime": "2026-11-21T12:00:00Z",
+              "lastSyncedAt": "2026-11-21T12:00:00Z",
+              "transactions": [{
+                "id": "t1", "kind": "income", "amountIrr": 45000000.0,
+                "category": {
+                  "id": "c2", "slug": "salary", "name": "Salary",
+                  "iconKey": "wallet", "tone": "positive", "kind": "income"
+                },
+                "occurredAt": "2026-11-01T09:00:00Z"
+              }],
+              "budgets": [{
+                "id": "b1", "categoryId": "c1", "categorySlug": "groceries",
+                "categoryName": "Groceries", "iconKey": "cart", "monthlyLimitIrr": 12000000.0
+              }],
+              "goals": [{
+                "id": "g1", "name": "Emergency fund", "targetIrr": 200000000.0,
+                "savedIrr": 75000000.0, "remainingIrr": 125000000.0, "percent": 37.5
+              }],
+              "settings": {
+                "displayName": "Ava Bennett", "email": "demo@aram.app", "avatarInitials": "AB",
+                "homeCurrency": "IRR", "ratesUpdatedAt": "2026-11-21T00:00:00Z"
               }
             }
             """.trimIndent(),
         )
-        assertEquals("conflict", envelope.error.code)
-        assertEquals("must be positive", envelope.error.fields?.get("amount_minor"))
-        assertEquals("req_123", envelope.error.requestId)
-        assertNotNull(envelope.error.details?.get("current"))
+        assertEquals(1, pull.transactions.size)
+        assertEquals(12_000_000.0, pull.budgets.single().monthlyLimitIrr, 0.001)
+        assertEquals(37.5, pull.goals.single().percent, 0.001)
+        assertEquals("IRR", pull.settings?.homeCurrency)
     }
 
     @Test
-    fun `auth response parses tokens`() {
-        val auth = AramJson.decodeFromString<DataEnvelope<AuthResponseDto>>(
+    fun `sync push parses applied and skipped ids`() {
+        val push = AramJson.decodeFromString<SyncPushResultDto>(
             """
             {
-              "data": {
-                "user": { "id": "u1", "email": "demo@aram.app" },
-                "tokens": {
-                  "access_token": "a", "access_expires_at": 1,
-                  "refresh_token": "r", "refresh_expires_at": 2
-                }
-              }
+              "applied": ["t1"], "skipped": ["t2"],
+              "serverTime": "2026-11-21T12:00:00Z",
+              "lastSyncedAt": "2026-11-21T12:00:00Z"
             }
             """.trimIndent(),
         )
-        assertEquals("a", auth.data.tokens.accessToken)
-        assertEquals(2L, auth.data.tokens.refreshExpiresAt)
+        assertEquals(listOf("t1"), push.applied)
+        assertEquals(listOf("t2"), push.skipped)
     }
 
     @Test
-    fun `sync envelope parses every collection`() {
-        val sync = AramJson.decodeFromString<SyncEnvelope>(
-            """
-            {
-              "data": {
-                "changes": {
-                  "accounts": [ { "id": "a1", "name": "Cash", "type": "CASH", "currency_code": "USD", "opening_balance_minor": 0 } ],
-                  "categories": [],
-                  "transactions": [],
-                  "budgets": [],
-                  "goals": [ { "id": "g1", "name": "Trip", "target_minor": 1, "currency_code": "USD", "status": "ACTIVE" } ],
-                  "goal_contributions": []
-                }
-              },
-              "meta": { "next_since": 42, "next_cursor": "c", "has_more": false }
-            }
-            """.trimIndent(),
+    fun `requests encode camelCase and omit nulls`() {
+        val json = AramJson.encodeToString(
+            SaveTransactionRequest(kind = "expense", amount = 250_000.0, note = "Lunch"),
         )
-        assertEquals(1, sync.data.changes.accounts.size)
-        assertEquals(1, sync.data.changes.goals.size)
-        assertEquals(42L, sync.meta?.nextSince)
+        assertTrue(json.contains("\"kind\":\"expense\""))
+        assertTrue(json.contains("\"amount\":250000.0"))
+        assertTrue(!json.contains("currency"))
+        assertTrue(!json.contains("categorySlug"))
     }
 
     @Test
-    fun `push envelope parses results`() {
-        val push = AramJson.decodeFromString<PushEnvelope>(
-            """
-            {
-              "data": {
-                "results": [
-                  { "idempotency_key": "k1", "status": "applied", "row": { "id": "t1" } },
-                  { "idempotency_key": "k2", "status": "conflict", "row": { "id": "t2" } },
-                  { "idempotency_key": "k3", "status": "rejected", "error": { "code": "validation_failed" } }
-                ]
-              },
-              "meta": { "server_time": 7 }
-            }
-            """.trimIndent(),
-        )
-        assertEquals(3, push.data.results.size)
-        assertEquals("conflict", push.data.results[1].status)
-        assertTrue(push.data.results[2].error != null)
-    }
-
-    @Test
-    fun `requests encode snake case and omit nulls`() {
-        val json = AramJson.encodeToString(PatchMeRequest(displayName = "Ava"))
-        assertTrue(json.contains("\"display_name\":\"Ava\""))
-        assertTrue(!json.contains("default_currency"))
+    fun `sync items omit defaults on the wire`() {
+        val json = AramJson.encodeToString(SyncPushRequest(items = listOf(SyncTransactionItem(id = "t1"))))
+        assertTrue(json.contains("\"id\":\"t1\""))
+        assertTrue(!json.contains("\"kind\""))
+        assertTrue(!json.contains("\"categorySlug\""))
     }
 }

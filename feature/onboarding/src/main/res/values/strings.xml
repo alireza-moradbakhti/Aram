@@ -1,7 +1,7 @@
 <resources>
     <string name="welcome_tagline">Save smarter. Spend calmer.</string>
     <string name="welcome_brand_sub">money, gently</string>
-    <string name="welcome_headline_prefix">Know what you can spend, </string>
+    <string name="welcome_headline_prefix">"Know what you can spend, "</string>
     <string name="welcome_headline_accent">every day.</string>
     <string name="welcome_lead">Aram turns your salary into one calm daily number — offline, private, and in your currency.</string>
     <string name="welcome_preview_label">SAFE TO SPEND</string>
@@ -20,6 +20,67 @@
     <string name="welcome_create_profile">Get started</string>
     <string name="welcome_sign_in">I already have an account</string>
     <string name="welcome_sign_in_unavailable">Accounts arrive with sync. Keep saving locally for now.</string>
+    <string name="welcome_create_account">Create an online account</string>
     <string name="welcome_terms">By continuing you agree to the Terms and Privacy Policy.</string>
     <string name="welcome_privacy_note">Your data is private to your account.</string>
+
+    <string name="auth_back">Back</string>
+    <string name="auth_login_title">Welcome back</string>
+    <string name="auth_login_sub">Pick up where you left off.</string>
+    <string name="auth_signup_title">Create your account</string>
+    <string name="auth_signup_sub">Two minutes now, calmer numbers later.</string>
+    <string name="auth_full_name">Full name</string>
+    <string name="auth_email">Email</string>
+    <string name="auth_password">Password</string>
+    <string name="auth_show_password">Show password</string>
+    <string name="auth_hide_password">Hide password</string>
+    <string name="auth_forgot_password">Forgot password?</string>
+    <string name="auth_login_action">Log in</string>
+    <string name="auth_login_loading">Signing in…</string>
+    <string name="auth_signup_action">Create account</string>
+    <string name="auth_signup_loading">Creating account…</string>
+    <string name="auth_switch_to_login">Already have an account? </string>
+    <string name="auth_switch_to_signup">New here? </string>
+    <string name="auth_login_link">Log in</string>
+    <string name="auth_signup_link">Create an account</string>
+    <string name="auth_terms_check">I agree to the Terms and Privacy Policy</string>
+    <string name="auth_password_hint">8+ characters. This stays on your device until you turn on sync.</string>
+    <string name="auth_strength_weak">Weak</string>
+    <string name="auth_strength_fair">Fair</string>
+    <string name="auth_strength_strong">Strong</string>
+    <string name="auth_use_demo">Fill demo credentials</string>
+    <string name="auth_forgot_password_pending">Password reset arrives in a later update.</string>
+    <string name="auth_error_credentials">We couldn\'t sign you in. Check your email and password.</string>
+    <string name="auth_error_offline">You\'re offline. Check your connection and try again.</string>
+    <string name="auth_error_timeout">The server took too long. Try again.</string>
+    <string name="auth_error_rate_limited">Too many attempts. Try again in a moment.</string>
+    <string name="auth_error_conflict">This account isn\'t ready yet. Contact support.</string>
+    <string name="auth_error_forbidden">This account can\'t sign in right now.</string>
+    <string name="auth_error_storage">Could not save your session on this device. Try again.</string>
+    <string name="auth_error_generic">Something went wrong. Try again.</string>
+
+    <string name="welcome_get_started">Get started</string>
+
+    <string name="splash_tag">Aram</string>
+    <string name="splash_tagline">money, gently</string>
+    <string name="splash_copy">Preparing your month…</string>
+    <string name="splash_foot">Private · offline-first</string>
+
+    <string name="lang_pill">English</string>
+    <string name="lang_title">App language</string>
+    <string name="lang_soon">soon</string>
+    <string name="lang_coming_soon">Persian and French arrive with the language update.</string>
+
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_back">Back</string>
+    <string name="onboarding_next">Continue</string>
+    <string name="onboarding_start">Get started</string>
+    <string name="onboarding_title_1">See your month in one glance</string>
+    <string name="onboarding_body_1">Aram rolls income, bills and budgets into a single safe-to-spend number, refreshed every morning.</string>
+    <string name="onboarding_title_2">Budgets that warn you early</string>
+    <string name="onboarding_body_2">Each category gets a quiet guardrail. Aram nudges you two weeks out, while you can still change the month.</string>
+    <string name="onboarding_title_3">Your data, only yours</string>
+    <string name="onboarding_body_3">Everything stays on this device by default. Turn on encrypted sync later — it copies, never replaces.</string>
+    <string name="onboarding_chip_expense">−180,000 · Food</string>
+    <string name="onboarding_chip_month">68% · October</string>
 </resources>

@@ -81,7 +81,12 @@ internal class FakeTransactionRepository : TransactionRepository {
         { id, draft -> Outcome.Success(testTransaction(id = id, draft = draft)) }
     var deleteResult: Outcome<Unit> = Outcome.Success(Unit)
 
-    override fun observeTransactions(): Flow<List<Transaction>> = flowOf(emptyList())
+    override fun observeTransactions(
+        fromInclusive: Long,
+        toExclusive: Long,
+    ): Flow<List<Transaction>> = flowOf(emptyList())
+
+    override fun observeRecent(limit: Int): Flow<List<Transaction>> = flowOf(emptyList())
 
     override fun observeTransaction(id: String): Flow<Transaction?> = flowOf(null)
 

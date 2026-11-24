@@ -28,4 +28,6 @@ data class TransactionEntity(
     val createdAt: Long,
     val updatedAt: Long,
     val deletedAt: Long?,
+    /** Written locally and not yet acknowledged by `POST /sync/push`. */
+    val pendingPush: Boolean = false,
 )

@@ -1,11 +1,11 @@
 package com.aram.core.network.api
 
 import com.aram.core.model.AppError
-import kotlinx.serialization.json.JsonElement
 
 /**
- * Every expected transport/API failure. Kinds mirror the `code` column of the
- * error table in `docs/API_CONTRACT.md`, so [toAppError] is a 1:1 mapping.
+ * Every expected transport/API failure, mapped from the HTTP status and the
+ * two error bodies the API produces (`Result` for business errors,
+ * FastEndpoints' validation body for `400`).
  */
 sealed interface ApiError {
 
@@ -24,10 +24,7 @@ sealed interface ApiError {
         val message: String? = null,
     ) : ApiError
 
-    data class Conflict(
-        val message: String? = null,
-        val currentRow: JsonElement? = null,
-    ) : ApiError
+    data class Conflict(val message: String? = null) : ApiError
 
     data class RateLimited(val retryAfterSeconds: Long? = null) : ApiError
 
