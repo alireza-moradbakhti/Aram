@@ -180,6 +180,40 @@ class LedgerWriteDaoTest {
         assertNotNull(db.transactionDao().findById(USER, "in"))
     }
 
+    @Test
+    fun `restoring clears the tombstone and enqueues the update`() = runBlocking {
+        db.transactionDao().upsert(transaction("t1"))
+        ledger.deleteWithOutbox(USER, "t1", 10L, entry("e1", "t1", SyncOutboxEntity.OP_DELETE))
+
+        val changed = ledger.restoreWithOutbox(
+            userId = USER,
+            id = "t1",
+            updatedAt = 20L,
+            entry = entry("e2", "t1", SyncOutboxEntity.OP_UPDATE),
+        )
+
+        assertEquals(1, changed)
+        val row = db.transactionDao().findById(USER, "t1")
+        assertEquals(20L, row?.updatedAt)
+        assertEquals(true, row?.pendingPush)
+        assertEquals(2, outbox.count(USER))
+    }
+
+    @Test
+    fun `restoring a live row queues nothing`() = runBlocking {
+        db.transactionDao().upsert(transaction("t1"))
+
+        val changed = ledger.restoreWithOutbox(
+            userId = USER,
+            id = "t1",
+            updatedAt = 20L,
+            entry = entry("e1", "t1", SyncOutboxEntity.OP_UPDATE),
+        )
+
+        assertEquals(0, changed)
+        assertEquals(0, outbox.count(USER))
+    }
+
     private fun entry(id: String, entityId: String, op: String) = SyncOutboxEntity(
         id = id,
         userId = USER,

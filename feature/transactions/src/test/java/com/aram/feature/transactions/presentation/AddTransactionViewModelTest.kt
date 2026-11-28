@@ -1,14 +1,19 @@
 package com.aram.feature.transactions.presentation
 
+import androidx.lifecycle.SavedStateHandle
+import app.cash.turbine.test
 import com.aram.core.designsystem.state.SubmitState
 import com.aram.core.domain.repository.LedgerDirectory
 import com.aram.core.domain.repository.LedgerLookup
 import com.aram.core.domain.repository.TransactionRepository
 import com.aram.core.domain.transaction.TransactionDraft
 import com.aram.core.domain.transaction.TransactionField
+import com.aram.core.domain.transaction.TransactionFilter
 import com.aram.core.domain.transaction.TransferDraft
 import com.aram.core.domain.usecase.CreateTransaction
 import com.aram.core.domain.usecase.CreateTransfer
+import com.aram.core.domain.usecase.DeleteTransaction
+import com.aram.core.domain.usecase.UpdateTransaction
 import com.aram.core.model.Account
 import com.aram.core.model.AccountType
 import com.aram.core.model.AppError
@@ -18,6 +23,9 @@ import com.aram.core.model.Outcome
 import com.aram.core.model.Transaction
 import com.aram.core.model.TransactionType
 import com.aram.core.money.CurrencyCode
+import java.time.Instant
+import java.time.ZoneId
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -26,6 +34,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -53,10 +62,16 @@ class AddTransactionViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel() = AddTransactionViewModel(
+    private fun viewModel(editingId: String? = null) = AddTransactionViewModel(
         createTransaction = CreateTransaction(repository, FakeLedgerLookup()),
         createTransfer = CreateTransfer(repository, FakeLedgerLookup()),
+        updateTransaction = UpdateTransaction(repository, FakeLedgerLookup()),
+        deleteTransaction = DeleteTransaction(repository),
+        repository = repository,
         directory = FakeLedgerDirectory(accounts, categories),
+        savedStateHandle = editingId
+            ?.let { SavedStateHandle(mapOf(TRANSACTION_ID_ARG to it)) }
+            ?: SavedStateHandle(),
     )
 
     @Test
@@ -165,6 +180,53 @@ class AddTransactionViewModelTest {
     }
 
     @Test
+    fun `uiState streams submitting then saved`() = runTest(dispatcher) {
+        val gate = CompletableDeferred<Unit>()
+        repository.createGate = gate
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.uiState.test {
+            awaitItem()
+            viewModel.onAmountChange("5")
+            assertEquals("5", awaitItem().amountInput)
+
+            viewModel.onSave()
+            runCurrent()
+            assertEquals(SubmitState.Submitting, awaitItem().submitState)
+
+            gate.complete(Unit)
+            advanceUntilIdle()
+            assertTrue(awaitItem().saved)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `uiState streams submitting then failed without losing input`() = runTest(dispatcher) {
+        repository.createResult = Outcome.Failure(AppError.Storage())
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.uiState.test {
+            awaitItem()
+            viewModel.onAmountChange("5")
+            assertEquals("5", awaitItem().amountInput)
+
+            viewModel.onSave()
+            runCurrent()
+            assertEquals(SubmitState.Submitting, awaitItem().submitState)
+
+            advanceUntilIdle()
+            val failed = awaitItem()
+            assertEquals(SubmitState.Failed(AppError.Storage()), failed.submitState)
+            assertEquals("5", failed.amountInput)
+            assertTrue(!failed.saved)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `repository failure becomes a typed submit failure and keeps input`() = runTest(dispatcher) {
         repository.createResult = Outcome.Failure(AppError.Storage())
         val viewModel = viewModel()
@@ -210,6 +272,24 @@ class AddTransactionViewModelTest {
     }
 
     @Test
+    fun `edit mode prefills every field from the stored transaction`() = runTest(dispatcher) {
+        val stored = saved.copy(amountMinor = 1_234L, note = "Lunch", occurredAt = 1_700_000_000_000L)
+        val viewModel = editingViewModel(stored)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertTrue(state.isEditing)
+        assertEquals("12.34", state.amountInput)
+        assertEquals(TransactionType.EXPENSE, state.type)
+        assertEquals(cash.id, state.selectedAccountId)
+        assertEquals(food.id, state.selectedCategoryId)
+        assertEquals("Lunch", state.note)
+        val expectedDate = Instant.ofEpochMilli(stored.occurredAt).atZone(ZoneId.systemDefault()).toLocalDate()
+        assertEquals(expectedDate, state.occurredOn)
+        assertTrue(state.canSave)
+    }
+
+    @Test
     fun `transfer saves a draft with both accounts`() = runTest(dispatcher) {
         accounts.value = listOf(cash, card)
         val viewModel = viewModel()
@@ -226,6 +306,21 @@ class AddTransactionViewModelTest {
         assertEquals(card.id, draft?.toAccountId)
         assertEquals(125_000L, draft?.amountMinor)
         assertEquals("Move to card", draft?.note?.trim())
+        assertTrue(viewModel.uiState.value.saved)
+    }
+
+    @Test
+    fun `edit save updates the same row instead of creating`() = runTest(dispatcher) {
+        val viewModel = editingViewModel(saved)
+        advanceUntilIdle()
+
+        viewModel.onAmountChange("20")
+        viewModel.onSave()
+        advanceUntilIdle()
+
+        assertNull(repository.createdDraft)
+        assertEquals(saved.id, repository.updatedId)
+        assertEquals(2_000L, repository.updatedDraft?.amountMinor)
         assertTrue(viewModel.uiState.value.saved)
     }
 
@@ -279,6 +374,39 @@ class AddTransactionViewModelTest {
 
         assertTrue(TransactionField.TO_ACCOUNT in viewModel.uiState.value.invalidFields)
         assertNull(repository.transferDraft)
+        assertTrue(!viewModel.uiState.value.saved)
+    }
+
+    @Test
+    fun `delete confirm soft deletes the editing row and flags deletion`() = runTest(dispatcher) {
+        val viewModel = editingViewModel(saved)
+        advanceUntilIdle()
+
+        viewModel.onDeleteConfirmed()
+        advanceUntilIdle()
+
+        assertEquals(listOf(saved.id), repository.deletedIds)
+        assertTrue(viewModel.uiState.value.deleted)
+    }
+
+    @Test
+    fun `delete failure surfaces a typed failure and keeps the row`() = runTest(dispatcher) {
+        repository.deleteResult = Outcome.Failure(AppError.Storage())
+        val viewModel = editingViewModel(saved)
+        advanceUntilIdle()
+
+        viewModel.onDeleteConfirmed()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(SubmitState.Failed(AppError.Storage()), state.submitState)
+        assertTrue(!state.deleted)
+        assertTrue(state.deleteFailed)
+    }
+
+    private fun editingViewModel(transaction: Transaction): AddTransactionViewModel {
+        repository.stored.value = transaction
+        return viewModel(editingId = transaction.id)
     }
 
     private class FakeLedgerDirectory(
@@ -303,6 +431,13 @@ class AddTransactionViewModelTest {
         var createResult: Outcome<Transaction> = Outcome.Success(saved)
         var transferDraft: TransferDraft? = null
         var transferResult: Outcome<String> = Outcome.Success("group-1")
+        var createGate: CompletableDeferred<Unit>? = null
+        val stored = MutableStateFlow<Transaction?>(null)
+        var updatedId: String? = null
+        var updatedDraft: TransactionDraft? = null
+        var updateResult: Outcome<Transaction> = Outcome.Success(saved)
+        val deletedIds = mutableListOf<String>()
+        var deleteResult: Outcome<Unit> = Outcome.Success(Unit)
 
         override fun observeTransactions(
             fromInclusive: Long,
@@ -311,22 +446,34 @@ class AddTransactionViewModelTest {
 
         override fun observeRecent(limit: Int): Flow<List<Transaction>> = flowOf(emptyList())
 
-        override fun observeTransaction(id: String): Flow<Transaction?> = flowOf(null)
+        override fun search(filter: TransactionFilter): Flow<List<Transaction>> =
+            flowOf(emptyList())
+
+        override fun observeTransaction(id: String): Flow<Transaction?> = stored
 
         override suspend fun create(draft: TransactionDraft): Outcome<Transaction> {
             createdDraft = draft
+            createGate?.await()
             return createResult
         }
 
-        override suspend fun createTransfer(draft: TransferDraft): Outcome<String> {
+override suspend fun createTransfer(draft: TransferDraft): Outcome<String> {
             transferDraft = draft
             return transferResult
         }
 
-        override suspend fun update(id: String, draft: TransactionDraft): Outcome<Transaction> =
-            createResult
+        override suspend fun update(id: String, draft: TransactionDraft): Outcome<Transaction> {
+            updatedId = id
+            updatedDraft = draft
+            return updateResult
+        }
 
-        override suspend fun softDelete(id: String): Outcome<Unit> = Outcome.Success(Unit)
+        override suspend fun softDelete(id: String): Outcome<Unit> {
+            deletedIds += id
+            return deleteResult
+        }
+
+        override suspend fun restore(id: String): Outcome<Unit> = Outcome.Success(Unit)
     }
 
     private companion object {

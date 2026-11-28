@@ -70,6 +70,32 @@ interface TransactionDao {
     )
     fun observeRecent(userId: String, limit: Int): Flow<List<TransactionEntity>>
 
+    /**
+     * Parameterized ledger search. Every criterion is optional and composes
+     * with AND: [type] equals, [excludeType] differs, [categoryId] equals,
+     * half-open occurredAt bounds, and a case-insensitive LIKE over [noteQuery]
+     * (SQLite LIKE folds ASCII case). Deleted rows never match.
+     */
+    @Query(
+        "SELECT * FROM transactions WHERE userId = :userId AND deletedAt IS NULL " +
+            "AND (:type IS NULL OR type = :type) " +
+            "AND (:excludeType IS NULL OR type != :excludeType) " +
+            "AND (:categoryId IS NULL OR categoryId = :categoryId) " +
+            "AND (:fromInclusive IS NULL OR occurredAt >= :fromInclusive) " +
+            "AND (:toExclusive IS NULL OR occurredAt < :toExclusive) " +
+            "AND (:noteQuery = '' OR note LIKE '%' || :noteQuery || '%') " +
+            "ORDER BY occurredAt DESC",
+    )
+    fun search(
+        userId: String,
+        noteQuery: String,
+        type: String?,
+        excludeType: String?,
+        categoryId: String?,
+        fromInclusive: Long?,
+        toExclusive: Long?,
+    ): Flow<List<TransactionEntity>>
+
     @Query(
         "SELECT * FROM transactions WHERE userId = :userId AND id = :id " +
             "AND deletedAt IS NULL",
@@ -81,6 +107,9 @@ interface TransactionDao {
             "AND deletedAt IS NULL",
     )
     suspend fun findById(userId: String, id: String): TransactionEntity?
+
+    @Query("SELECT * FROM transactions WHERE userId = :userId AND id = :id")
+    suspend fun findByIdIncludingDeleted(userId: String, id: String): TransactionEntity?
 
     @Query(
         "UPDATE transactions SET accountId = :accountId, categoryId = :categoryId, " +
@@ -106,6 +135,12 @@ interface TransactionDao {
             "WHERE userId = :userId AND id = :id AND deletedAt IS NULL",
     )
     suspend fun softDelete(userId: String, id: String, deletedAt: Long): Int
+
+    @Query(
+        "UPDATE transactions SET deletedAt = NULL, updatedAt = :updatedAt, pendingPush = 1 " +
+            "WHERE userId = :userId AND id = :id AND deletedAt IS NOT NULL",
+    )
+    suspend fun restore(userId: String, id: String, updatedAt: Long): Int
 
     @Query(
         "SELECT COALESCE(SUM(amountMinor), 0) FROM transactions " +

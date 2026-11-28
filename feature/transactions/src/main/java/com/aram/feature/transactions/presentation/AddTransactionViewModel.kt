@@ -1,9 +1,11 @@
 package com.aram.feature.transactions.presentation
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aram.core.designsystem.state.SubmitState
 import com.aram.core.domain.repository.LedgerDirectory
+import com.aram.core.domain.repository.TransactionRepository
 import com.aram.core.domain.transaction.TransactionDraft
 import com.aram.core.domain.transaction.TransactionField
 import com.aram.core.domain.transaction.TransactionWriteResult
@@ -11,14 +13,20 @@ import com.aram.core.domain.transaction.TransferDraft
 import com.aram.core.domain.transaction.TransferWriteResult
 import com.aram.core.domain.usecase.CreateTransaction
 import com.aram.core.domain.usecase.CreateTransfer
+import com.aram.core.domain.usecase.DeleteTransaction
+import com.aram.core.domain.usecase.UpdateTransaction
 import com.aram.core.model.Account
 import com.aram.core.model.Category
 import com.aram.core.model.CategoryKind
+import com.aram.core.model.Outcome
+import com.aram.core.model.Transaction
 import com.aram.core.model.TransactionType
 import com.aram.core.money.AmountParseResult
 import com.aram.core.money.AmountParser
 import com.aram.core.money.CurrencyCode
+import com.aram.core.money.Money
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
@@ -27,8 +35,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
+const val TRANSACTION_ID_ARG = "transactionId"
 
 sealed interface AmountInputError {
     data object Empty : AmountInputError
@@ -41,6 +53,7 @@ sealed interface AmountInputError {
 }
 
 data class AddTransactionUiState(
+    val transactionId: String? = null,
     val type: TransactionType = TransactionType.EXPENSE,
     val amountInput: String = "",
     val amountError: AmountInputError? = null,
@@ -56,7 +69,12 @@ data class AddTransactionUiState(
     val invalidFields: Set<TransactionField> = emptySet(),
     val submitState: SubmitState = SubmitState.Idle,
     val saved: Boolean = false,
+    val deleted: Boolean = false,
+    val deleteFailed: Boolean = false,
 ) {
+
+    val isEditing: Boolean
+        get() = transactionId != null
 
     val selectedAccount: Account?
         get() = accounts.firstOrNull { it.id == selectedAccountId }
@@ -78,7 +96,7 @@ data class AddTransactionUiState(
 
     val canSave: Boolean
         get() {
-            val ready = optionsLoaded && accounts.isNotEmpty() &&
+            val ready = optionsLoaded && accounts.isNotEmpty() && !deleted &&
                 submitState !is SubmitState.Submitting && !saved
             if (!ready) return false
             if (!isTransfer) return true
@@ -92,10 +110,18 @@ data class AddTransactionUiState(
 class AddTransactionViewModel @Inject constructor(
     private val createTransaction: CreateTransaction,
     private val createTransfer: CreateTransfer,
-    directory: LedgerDirectory,
+    private val updateTransaction: UpdateTransaction,
+    private val deleteTransaction: DeleteTransaction,
+    private val repository: TransactionRepository,
+    private val directory: LedgerDirectory,
+    savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(AddTransactionUiState())
+    private val transactionId: String? = savedStateHandle[TRANSACTION_ID_ARG]
+    private var originalTime: LocalTime? = null
+    private var prefilled = false
+
+    private val _uiState = MutableStateFlow(AddTransactionUiState(transactionId = transactionId))
     val uiState: StateFlow<AddTransactionUiState> = _uiState.asStateFlow()
 
     init {
@@ -105,6 +131,22 @@ class AddTransactionViewModel @Inject constructor(
                 directory.observeCategories(),
             ) { accounts, categories -> accounts to categories }
                 .collect { (accounts, categories) -> onDirectoryChanged(accounts, categories) }
+        }
+        if (transactionId != null) {
+            viewModelScope.launch {
+                val id = transactionId
+                // Prefill once the directory is known so stored ids are not
+                // replaced by the default first account/category.
+                combine(
+                    directory.observeAccounts(),
+                    directory.observeCategories(),
+                ) { accounts, categories -> accounts to categories }
+                    .first()
+                repository.observeTransaction(id)
+                    .filterNotNull()
+                    .first()
+                    .let(::prefill)
+            }
         }
     }
 
@@ -226,13 +268,19 @@ class AddTransactionViewModel @Inject constructor(
             type = state.type,
             amountMinor = parsed.money.amountMinor,
             currencyCode = state.currency.isoCode,
-            occurredAt = state.occurredAt(),
+            occurredAt = occurredAt(state.occurredOn),
             note = state.note.takeIf { it.isNotBlank() },
         )
 
         _uiState.update { it.copy(submitState = SubmitState.Submitting) }
         viewModelScope.launch {
-            when (val result = createTransaction(draft)) {
+            val editingId = transactionId
+            val result = if (editingId == null) {
+                createTransaction(draft)
+            } else {
+                updateTransaction(editingId, draft)
+            }
+            when (result) {
                 is TransactionWriteResult.Success -> _uiState.update {
                     it.copy(submitState = SubmitState.Idle, saved = true)
                 }
@@ -246,6 +294,25 @@ class AddTransactionViewModel @Inject constructor(
 
                 is TransactionWriteResult.Failed -> _uiState.update {
                     it.copy(submitState = SubmitState.Failed(result.error))
+                }
+            }
+        }
+    }
+
+    fun onDeleteConfirmed() {
+        val id = transactionId ?: return
+        val state = _uiState.value
+        if (state.submitState is SubmitState.Submitting || state.deleted) return
+
+        _uiState.update { it.copy(submitState = SubmitState.Submitting, deleteFailed = false) }
+        viewModelScope.launch {
+            when (val result = deleteTransaction(id)) {
+                is Outcome.Success -> _uiState.update {
+                    it.copy(submitState = SubmitState.Idle, deleted = true)
+                }
+
+                is Outcome.Failure -> _uiState.update {
+                    it.copy(submitState = SubmitState.Failed(result.error), deleteFailed = true)
                 }
             }
         }
@@ -275,7 +342,7 @@ class AddTransactionViewModel @Inject constructor(
             toAccountId = destination.id,
             amountMinor = parsed.money.amountMinor,
             currencyCode = state.currency.isoCode,
-            occurredAt = state.occurredAt(),
+            occurredAt = occurredAt(state.occurredOn),
             note = state.note.takeIf { it.isNotBlank() },
         )
 
@@ -300,8 +367,32 @@ class AddTransactionViewModel @Inject constructor(
         }
     }
 
-    private fun AddTransactionUiState.occurredAt(): Long = occurredOn
-        .atTime(LocalTime.now())
+    private fun prefill(transaction: Transaction) {
+        if (transaction.type == TransactionType.TRANSFER) return
+        val currency = runCatching { CurrencyCode.fromIsoCode(transaction.currencyCode) }
+            .getOrDefault(CurrencyCode.USD)
+        val occurredAt = Instant.ofEpochMilli(transaction.occurredAt)
+            .atZone(ZoneId.systemDefault())
+        originalTime = occurredAt.toLocalTime()
+        prefilled = true
+        _uiState.update { state ->
+            state.copy(
+                type = transaction.type,
+                amountInput = Money(transaction.amountMinor, currency)
+                    .majorUnits()
+                    .setScale(currency.fractionDigits)
+                    .toPlainString(),
+                currency = currency,
+                selectedAccountId = transaction.accountId,
+                selectedCategoryId = transaction.categoryId,
+                occurredOn = occurredAt.toLocalDate(),
+                note = transaction.note.orEmpty(),
+            )
+        }
+    }
+
+    private fun occurredAt(date: LocalDate): Long = date
+        .atTime(originalTime ?: LocalTime.now())
         .atZone(ZoneId.systemDefault())
         .toInstant()
         .toEpochMilli()
@@ -309,10 +400,10 @@ class AddTransactionViewModel @Inject constructor(
     private fun onDirectoryChanged(accounts: List<Account>, categories: List<Category>) {
         _uiState.update { state ->
             val account = accounts.firstOrNull { it.id == state.selectedAccountId }
-                ?: accounts.firstOrNull()
+                ?: if (prefilled) null else accounts.firstOrNull()
             val matching = categories.filter { it.kind == state.type.categoryKind }
             val category = matching.firstOrNull { it.id == state.selectedCategoryId }
-                ?: matching.firstOrNull()
+                ?: if (prefilled) null else matching.firstOrNull()
             val destinationId = if (state.isTransfer) {
                 (
                     accounts.firstOrNull {

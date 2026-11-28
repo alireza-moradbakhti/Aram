@@ -1,11 +1,13 @@
 package com.aram.feature.transactions.presentation
 
+import app.cash.turbine.test
 import com.aram.core.domain.repository.LedgerDirectory
 import com.aram.core.domain.repository.LedgerSync
 import com.aram.core.domain.repository.OutboxSnapshot
 import com.aram.core.domain.repository.OutboxSync
 import com.aram.core.domain.repository.TransactionRepository
 import com.aram.core.domain.transaction.TransactionDraft
+import com.aram.core.domain.transaction.TransactionFilter
 import com.aram.core.domain.transaction.TransferDraft
 import com.aram.core.model.Account
 import com.aram.core.model.AccountType
@@ -28,6 +30,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -64,6 +67,44 @@ class TransactionsViewModelTest {
     }
 
     private fun viewModel() = TransactionsViewModel(repository, directory, ledgerSync, outbox, clock)
+
+    @Test
+    fun `uiState streams loading then the loaded month`() = runTest(dispatcher) {
+        repository.rows.value = listOf(
+            expense("a", 18_000, "food", "2026-10-12T09:12:00Z"),
+        )
+        val viewModel = viewModel()
+
+        viewModel.uiState.test {
+            assertTrue(awaitItem().loading)
+            advanceUntilIdle()
+            val loaded = awaitItem()
+            assertTrue(!loaded.loading)
+            assertEquals(listOf("a"), loaded.groups.flatMap { it.transactions }.map { it.id })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a scope change streams the filtered rows`() = runTest(dispatcher) {
+        repository.rows.value = listOf(
+            expense("expense", 18_000, "food", "2026-10-12T09:12:00Z"),
+            income("income", 8_500_000, "salary", "2026-10-12T08:00:00Z"),
+        )
+        val viewModel = viewModel()
+
+        viewModel.uiState.test {
+            awaitItem()
+            advanceUntilIdle()
+            awaitItem()
+            viewModel.onScopeChange(TransactionScope.INCOME)
+            advanceUntilIdle()
+
+            val filtered = awaitItem()
+            assertEquals(listOf("income"), filtered.groups.flatMap { it.transactions }.map { it.id })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 
     @Test
     fun `rows group by day newest first with newest rows first`() = runTest(dispatcher) {
@@ -311,6 +352,146 @@ class TransactionsViewModelTest {
         assertEquals(-50_000, state.groups.single().totalMinor)
     }
 
+    @Test
+    fun `typing debounces the search until the pause`() = runTest(dispatcher) {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onSearchQueryChange("co")
+        advanceTimeBy(100)
+        viewModel.onSearchQueryChange("coffee")
+        advanceTimeBy(100)
+        assertEquals(0, repository.searches.size)
+
+        advanceUntilIdle()
+        assertEquals(1, repository.searches.size)
+        assertEquals("coffee", repository.searches.single().query)
+        assertTrue(viewModel.uiState.value.isFiltering)
+        assertEquals("coffee", viewModel.uiState.value.query)
+    }
+
+    @Test
+    fun `clearing the query returns to the month view`() = runTest(dispatcher) {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        viewModel.onSearchQueryChange("coffee")
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.isFiltering)
+        val searchesBeforeClear = repository.searches.size
+
+        viewModel.onSearchQueryChange("")
+        advanceUntilIdle()
+
+        assertEquals(false, viewModel.uiState.value.isFiltering)
+        assertEquals(searchesBeforeClear, repository.searches.size)
+    }
+
+    @Test
+    fun `search reaches across months`() = runTest(dispatcher) {
+        repository.rows.value = listOf(
+            expense("oct", 18_000, "food", "2026-10-12T09:12:00Z", note = "Coffee"),
+            expense("sep", 9_000, "food", "2026-09-02T08:00:00Z", note = "Coffee beans"),
+            expense("tea", 5_000, "food", "2026-09-03T08:00:00Z", note = "Tea"),
+        )
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onSearchQueryChange("coffee")
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertTrue(state.isFiltering)
+        assertEquals(2, state.entryCount)
+        assertEquals(2, state.groups.flatMap { it.transactions }.size)
+        assertEquals(false, state.noMatches)
+    }
+
+    @Test
+    fun `expenses scope becomes an income exclusion in the search`() = runTest(dispatcher) {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onScopeChange(TransactionScope.EXPENSES)
+        viewModel.onSearchQueryChange("ride")
+        advanceUntilIdle()
+
+        val filter = repository.searches.last()
+        assertEquals(null, filter.type)
+        assertEquals(TransactionType.INCOME, filter.excludeType)
+        assertEquals(TransactionScope.EXPENSES, viewModel.uiState.value.scope)
+    }
+
+    @Test
+    fun `applied filters empty the results and flag no matches`() = runTest(dispatcher) {
+        repository.rows.value = listOf(
+            expense("a", 18_000, "food", "2026-10-12T09:12:00Z", note = "Coffee"),
+        )
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        assertEquals(false, viewModel.uiState.value.noMatches)
+
+        viewModel.onApplyFilters(TransactionFiltersUi(categoryId = "transport"))
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertTrue(state.isFiltering)
+        assertTrue(state.noMatches)
+        assertEquals(0, state.entryCount)
+        assertEquals("transport", repository.searches.last().categoryId)
+    }
+
+    @Test
+    fun `date presets map to half-open local bounds`() = runTest(dispatcher) {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onApplyFilters(TransactionFiltersUi(dateRange = DateRangePreset.LAST_30_DAYS))
+        advanceUntilIdle()
+
+        val filter = repository.searches.last()
+        assertEquals(Instant.parse("2026-09-13T00:00:00Z").toEpochMilli(), filter.fromInclusive)
+        assertEquals(Instant.parse("2026-10-13T00:00:00Z").toEpochMilli(), filter.toExclusive)
+
+        viewModel.onApplyFilters(TransactionFiltersUi(dateRange = DateRangePreset.THIS_YEAR))
+        advanceUntilIdle()
+
+        val year = repository.searches.last()
+        assertEquals(Instant.parse("2026-01-01T00:00:00Z").toEpochMilli(), year.fromInclusive)
+        assertEquals(Instant.parse("2027-01-01T00:00:00Z").toEpochMilli(), year.toExclusive)
+    }
+
+    @Test
+    fun `clear all resets the query, filters and scope`() = runTest(dispatcher) {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        viewModel.onSearchQueryChange("coffee")
+        viewModel.onScopeChange(TransactionScope.INCOME)
+        viewModel.onApplyFilters(
+            TransactionFiltersUi(categoryId = "food", dateRange = DateRangePreset.THIS_YEAR),
+        )
+        advanceUntilIdle()
+
+        viewModel.onClearFilters()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(false, state.isFiltering)
+        assertEquals(TransactionScope.ALL, state.scope)
+        assertEquals(TransactionFiltersUi(), state.filters)
+        assertEquals("", state.query)
+    }
+
+    @Test
+    fun `an empty month is not a no-match state`() = runTest(dispatcher) {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(false, state.isFiltering)
+        assertEquals(false, state.noMatches)
+        assertTrue(state.isEmpty)
+    }
+
     private fun expense(
         id: String,
         amount: Long,
@@ -382,10 +563,27 @@ class TransactionsViewModelTest {
 
         val rows = MutableStateFlow<List<Transaction>>(emptyList())
         val ranges = mutableListOf<Pair<Long, Long>>()
+        val searches = mutableListOf<TransactionFilter>()
 
         override fun observeTransactions(fromInclusive: Long, toExclusive: Long): Flow<List<Transaction>> {
             ranges += fromInclusive to toExclusive
             return rows.map { all -> all.filter { it.occurredAt in fromInclusive until toExclusive } }
+        }
+
+        override fun search(filter: TransactionFilter): Flow<List<Transaction>> {
+            searches += filter
+            return rows.map { all ->
+                all.filter { tx ->
+                    val from = filter.fromInclusive
+                    val to = filter.toExclusive
+                    (filter.query.isEmpty() || tx.note?.contains(filter.query, ignoreCase = true) == true) &&
+                        (filter.type == null || tx.type == filter.type) &&
+                        (filter.excludeType == null || tx.type != filter.excludeType) &&
+                        (filter.categoryId == null || tx.categoryId == filter.categoryId) &&
+                        (from == null || tx.occurredAt >= from) &&
+                        (to == null || tx.occurredAt < to)
+                }
+            }
         }
 
         override fun observeRecent(limit: Int): Flow<List<Transaction>> = rows
@@ -404,6 +602,8 @@ class TransactionsViewModelTest {
             Outcome.Failure(AppError.Storage())
 
         override suspend fun softDelete(id: String): Outcome<Unit> = Outcome.Success(Unit)
+
+        override suspend fun restore(id: String): Outcome<Unit> = Outcome.Success(Unit)
     }
 
     private class FakeLedgerSync(private val events: MutableList<String>) : LedgerSync {

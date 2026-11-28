@@ -76,12 +76,14 @@ internal class FakeTransactionRepository : TransactionRepository {
     val updated = mutableListOf<Pair<String, TransactionDraft>>()
     val deleted = mutableListOf<String>()
     val transfers = mutableListOf<TransferDraft>()
+    val restored = mutableListOf<String>()
 
     var createResult: (TransactionDraft) -> Outcome<Transaction> = { Outcome.Success(testTransaction(draft = it)) }
     var updateResult: (String, TransactionDraft) -> Outcome<Transaction> =
         { id, draft -> Outcome.Success(testTransaction(id = id, draft = draft)) }
     var deleteResult: Outcome<Unit> = Outcome.Success(Unit)
     var transferResult: Outcome<String> = Outcome.Success("transfer-group-1")
+    var restoreResult: Outcome<Unit> = Outcome.Success(Unit)
 
     override fun observeTransactions(
         fromInclusive: Long,
@@ -89,6 +91,8 @@ internal class FakeTransactionRepository : TransactionRepository {
     ): Flow<List<Transaction>> = flowOf(emptyList())
 
     override fun observeRecent(limit: Int): Flow<List<Transaction>> = flowOf(emptyList())
+
+    override fun search(filter: TransactionFilter): Flow<List<Transaction>> = flowOf(emptyList())
 
     override fun observeTransaction(id: String): Flow<Transaction?> = flowOf(null)
 
@@ -110,6 +114,11 @@ internal class FakeTransactionRepository : TransactionRepository {
     override suspend fun softDelete(id: String): Outcome<Unit> {
         deleted += id
         return deleteResult
+    }
+
+    override suspend fun restore(id: String): Outcome<Unit> {
+        restored += id
+        return restoreResult
     }
 }
 

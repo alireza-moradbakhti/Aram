@@ -42,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -49,12 +50,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aram.core.designsystem.AramTheme
 import com.aram.core.designsystem.aramColors
 import com.aram.core.designsystem.component.AmountTextField
 import com.aram.core.designsystem.component.AramIconButton
+import com.aram.core.designsystem.component.AramGhostButton
 import com.aram.core.designsystem.component.AramPrimaryButton
 import com.aram.core.designsystem.component.AramSegmented
 import com.aram.core.designsystem.icon.AramIcons
@@ -77,6 +81,7 @@ import java.util.Locale
 fun AddTransactionRoute(
     onClose: () -> Unit,
     onSaved: () -> Unit,
+    onDeleted: (String) -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: AddTransactionViewModel = hiltViewModel(),
 ) {
@@ -86,6 +91,10 @@ fun AddTransactionRoute(
 
     LaunchedEffect(state.saved) {
         if (state.saved) onSaved()
+    }
+    LaunchedEffect(state.deleted) {
+        val id = state.transactionId
+        if (state.deleted && id != null) onDeleted(id)
     }
 
     ModalBottomSheet(
@@ -114,6 +123,7 @@ fun AddTransactionRoute(
             onDateSelect = viewModel::onDateSelected,
             onNoteChange = viewModel::onNoteChange,
             onSave = viewModel::onSave,
+            onDelete = viewModel::onDeleteConfirmed,
             onClose = onClose,
         )
     }
@@ -130,6 +140,7 @@ fun AddTransactionScreen(
     onDateSelect: (LocalDate) -> Unit,
     onNoteChange: (String) -> Unit,
     onSave: () -> Unit,
+    onDelete: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -137,7 +148,17 @@ fun AddTransactionScreen(
     var accountPickerOpen by rememberSaveable { mutableStateOf(false) }
     var transferPickerOpen by rememberSaveable { mutableStateOf(false) }
     var datePickerOpen by rememberSaveable { mutableStateOf(false) }
+    var deleteDialogOpen by rememberSaveable { mutableStateOf(false) }
     val isTransfer = state.isTransfer
+    val isExpense = state.type == TransactionType.EXPENSE
+    val isEditing = state.isEditing
+    val heading = when {
+        isTransfer -> "Transfer money"
+        isEditing && isExpense -> "Edit expense"
+        isEditing -> "Edit income"
+        isExpense -> "Add expense"
+        else -> "Add income"
+    }
 
     Column(
         modifier = modifier
@@ -153,11 +174,7 @@ fun AddTransactionScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = when (state.type) {
-                    TransactionType.EXPENSE -> "Add expense"
-                    TransactionType.INCOME -> "Add income"
-                    TransactionType.TRANSFER -> "Transfer money"
-                },
+                text = heading,
                 style = MaterialTheme.typography.titleMedium,
             )
             AramIconButton(
@@ -323,10 +340,11 @@ fun AddTransactionScreen(
         if (state.submitState is SubmitState.Failed) {
             Spacer(Modifier.height(12.dp))
             Text(
-                text = when (state.type) {
-                    TransactionType.EXPENSE -> "Couldn't save this expense. Try again."
-                    TransactionType.INCOME -> "Couldn't save this income. Try again."
-                    TransactionType.TRANSFER -> "Couldn't save this transfer. Try again."
+                text = when {
+                    state.deleteFailed -> "Couldn't delete this transaction. Try again."
+                    isTransfer -> "Couldn't save this transfer. Try again."
+                    isEditing -> "Couldn't save your changes. Try again."
+                    else -> "Couldn't save this ${if (isExpense) "expense" else "income"}. Try again."
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.danger,
@@ -336,16 +354,45 @@ fun AddTransactionScreen(
         Spacer(Modifier.height(16.dp))
 
         AramPrimaryButton(
-            text = when (state.type) {
-                TransactionType.EXPENSE -> "Save expense"
-                TransactionType.INCOME -> "Save income"
-                TransactionType.TRANSFER -> "Transfer"
+            text = when {
+                isTransfer -> "Transfer"
+                isEditing -> "Save changes"
+                isExpense -> "Save expense"
+                else -> "Save income"
             },
             onClick = onSave,
             enabled = state.canSave,
             loading = state.submitState is SubmitState.Submitting,
             modifier = Modifier.fillMaxWidth(),
         )
+
+        if (isEditing) {
+            Spacer(Modifier.height(4.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .clip(CircleShape)
+                    .clickable(enabled = state.submitState !is SubmitState.Submitting) {
+                        deleteDialogOpen = true
+                    },
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = AramIcons.trash,
+                    contentDescription = null,
+                    tint = colors.danger,
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Delete transaction",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = colors.danger,
+                )
+            }
+        }
     }
 
     if (datePickerOpen) {
@@ -357,6 +404,101 @@ fun AddTransactionScreen(
                 onDateSelect(date)
             },
         )
+    }
+
+    if (deleteDialogOpen) {
+        DeleteTransactionDialog(
+            onDismiss = { deleteDialogOpen = false },
+            onConfirm = {
+                deleteDialogOpen = false
+                onDelete()
+            },
+        )
+    }
+}
+
+@Composable
+private fun DeleteTransactionDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    val colors = MaterialTheme.aramColors
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp)
+                .clip(RoundedCornerShape(26.dp))
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.surfaceVariant,
+                            MaterialTheme.colorScheme.surface,
+                        ),
+                    ),
+                )
+                .border(1.dp, colors.borderStrong, RoundedCornerShape(26.dp))
+                .padding(start = 20.dp, end = 20.dp, top = 22.dp, bottom = 16.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(RoundedCornerShape(17.dp))
+                    .background(colors.dangerSoft)
+                    .border(1.dp, colors.danger.copy(alpha = 0.35f), RoundedCornerShape(17.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = AramIcons.trash,
+                    contentDescription = null,
+                    tint = colors.danger,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+            Text(
+                text = "Delete this transaction?",
+                style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp, lineHeight = 24.sp),
+                modifier = Modifier.padding(top = 14.dp),
+            )
+            Text(
+                text = "You can undo right after. If you're offline, the change syncs later.",
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, lineHeight = 20.sp),
+                color = colors.textDim,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AramGhostButton(
+                    text = "Cancel",
+                    onClick = onDismiss,
+                    modifier = Modifier.height(44.dp),
+                )
+                Box(
+                    modifier = Modifier
+                        .height(44.dp)
+                        .clip(CircleShape)
+                        .background(colors.dangerSoft)
+                        .border(1.dp, colors.danger.copy(alpha = 0.4f), CircleShape)
+                        .clickable(onClick = onConfirm)
+                        .padding(horizontal = 24.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "Delete",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = colors.danger,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -668,6 +810,7 @@ private fun AddTransactionScreenDarkPreview() {
             onDateSelect = {},
             onNoteChange = {},
             onSave = {},
+            onDelete = {},
             onClose = {},
             modifier = Modifier.background(MaterialTheme.colorScheme.surface),
         )
@@ -688,6 +831,7 @@ private fun AddTransactionScreenLightPreview() {
             onDateSelect = {},
             onNoteChange = {},
             onSave = {},
+            onDelete = {},
             onClose = {},
             modifier = Modifier.background(MaterialTheme.colorScheme.surface),
         )
@@ -721,6 +865,7 @@ private fun TransferScreenPreview() {
             onDateSelect = {},
             onNoteChange = {},
             onSave = {},
+            onDelete = {},
             onClose = {},
             modifier = Modifier.background(MaterialTheme.colorScheme.surface),
         )
