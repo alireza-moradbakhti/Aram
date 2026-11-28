@@ -1,5 +1,6 @@
 package com.aram.core.data
 
+import com.aram.core.database.dao.AccountBalanceRow
 import com.aram.core.database.dao.AccountDao
 import com.aram.core.database.dao.BudgetDao
 import com.aram.core.database.dao.CategoryDao
@@ -23,9 +24,12 @@ import com.aram.core.datastore.SessionToken
 import com.aram.core.datastore.SessionTokenStore
 import com.aram.core.datastore.SyncMetadata
 import com.aram.core.datastore.SyncMetadataStore
+import com.aram.core.domain.transaction.TransactionFilter
+import com.aram.core.model.TransactionType
 import kotlinx.coroutines.flow.Flow
 import com.aram.core.domain.repository.OutboxTrigger
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 
 class FakeUserDao : UserDao {
 
@@ -89,6 +93,9 @@ class FakeCategoryDao : CategoryDao {
 class FakeAccountDao : AccountDao {
 
     val rows = linkedMapOf<String, AccountEntity>()
+    val balance = MutableStateFlow<AccountBalanceRow?>(null)
+    var balanceError: Throwable? = null
+    var lastBalanceUserId: String? = null
 
     override suspend fun upsertAll(accounts: List<AccountEntity>) {
         accounts.forEach { rows[it.id] = it }
@@ -96,6 +103,12 @@ class FakeAccountDao : AccountDao {
 
     override fun observeByUser(userId: String): Flow<List<AccountEntity>> =
         MutableStateFlow(rows.values.filter { it.userId == userId && it.deletedAt == null })
+
+    override fun observeBalance(userId: String, accountId: String): Flow<AccountBalanceRow?> {
+        lastBalanceUserId = userId
+        val error = balanceError
+        return if (error == null) balance else flow { throw error }
+    }
 
     override suspend fun findById(userId: String, id: String): AccountEntity? =
         rows[id]?.takeIf { it.userId == userId && it.deletedAt == null }
@@ -162,8 +175,24 @@ class FakeTransactionDao : TransactionDao {
         var changed = 0
         rows.replaceAll { id, row ->
             val inRange = row.userId == userId && row.deletedAt == null && !row.pendingPush &&
+                row.transferGroupId == null &&
                 row.occurredAt >= fromInclusive && row.occurredAt < toExclusive
             if (inRange && id !in keepIds) {
+                changed++
+                row.copy(deletedAt = deletedAt, updatedAt = deletedAt)
+            } else {
+                row
+            }
+        }
+        return changed
+    }
+
+    fun softDeleteTransferGroup(userId: String, transferGroupId: String, deletedAt: Long): Int {
+        var changed = 0
+        rows.replaceAll { _, row ->
+            val matches = row.userId == userId && row.transferGroupId == transferGroupId &&
+                row.deletedAt == null
+            if (matches) {
                 changed++
                 row.copy(deletedAt = deletedAt, updatedAt = deletedAt)
             } else {
@@ -193,11 +222,48 @@ class FakeTransactionDao : TransactionDao {
         )
     }
 
+    var lastFilter: TransactionFilter? = null
+
+    override fun search(
+        userId: String,
+        noteQuery: String,
+        type: String?,
+        excludeType: String?,
+        categoryId: String?,
+        fromInclusive: Long?,
+        toExclusive: Long?,
+    ): Flow<List<TransactionEntity>> {
+        lastFilter = TransactionFilter(
+            query = noteQuery,
+            type = type?.let(TransactionType::valueOf),
+            excludeType = excludeType?.let(TransactionType::valueOf),
+            categoryId = categoryId,
+            fromInclusive = fromInclusive,
+            toExclusive = toExclusive,
+        )
+        return MutableStateFlow(
+            rows.values
+                .filter { row ->
+                    row.userId == userId && row.deletedAt == null &&
+                        (type == null || row.type == type) &&
+                        (excludeType == null || row.type != excludeType) &&
+                        (categoryId == null || row.categoryId == categoryId) &&
+                        (fromInclusive == null || row.occurredAt >= fromInclusive) &&
+                        (toExclusive == null || row.occurredAt < toExclusive) &&
+                        (noteQuery.isEmpty() || row.note?.contains(noteQuery, ignoreCase = true) == true)
+                }
+                .sortedByDescending { it.occurredAt },
+        )
+    }
+
     override fun observeById(userId: String, id: String): Flow<TransactionEntity?> =
         MutableStateFlow(rows[id]?.takeIf { it.userId == userId && it.deletedAt == null })
 
     override suspend fun findById(userId: String, id: String): TransactionEntity? =
         rows[id]?.takeIf { it.userId == userId && it.deletedAt == null }
+
+    override suspend fun findByIdIncludingDeleted(userId: String, id: String): TransactionEntity? =
+        rows[id]?.takeIf { it.userId == userId }
 
     override suspend fun update(
         userId: String,
@@ -230,6 +296,13 @@ class FakeTransactionDao : TransactionDao {
         val current = rows[id] ?: return 0
         if (current.userId != userId || current.deletedAt != null) return 0
         rows[id] = current.copy(deletedAt = deletedAt, updatedAt = deletedAt)
+        return 1
+    }
+
+    override suspend fun restore(userId: String, id: String, updatedAt: Long): Int {
+        val current = rows[id] ?: return 0
+        if (current.userId != userId || current.deletedAt == null) return 0
+        rows[id] = current.copy(deletedAt = null, updatedAt = updatedAt)
         return 1
     }
 
@@ -453,6 +526,9 @@ class FakeLedgerWriteDao(
 
     override suspend fun upsertTransaction(transaction: TransactionEntity) = transactions.upsert(transaction)
 
+    override suspend fun upsertTransactions(transactions: List<TransactionEntity>) =
+        transactions.forEach { this.transactions.upsert(it) }
+
     override suspend fun insertOutbox(entry: SyncOutboxEntity) = outbox.insert(entry)
 
     override suspend fun updateRow(
@@ -472,6 +548,15 @@ class FakeLedgerWriteDao(
 
     override suspend fun deleteRow(userId: String, id: String, deletedAt: Long): Int =
         transactions.softDelete(userId, id, deletedAt)
+
+override suspend fun deleteTransferRows(
+        userId: String,
+        transferGroupId: String,
+        deletedAt: Long,
+    ): Int = transactions.softDeleteTransferGroup(userId, transferGroupId, deletedAt)
+
+    override suspend fun restoreRow(userId: String, id: String, updatedAt: Long): Int =
+        transactions.restore(userId, id, updatedAt)
 }
 
 class FakeOutboxTrigger : OutboxTrigger {
