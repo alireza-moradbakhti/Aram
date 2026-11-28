@@ -40,7 +40,7 @@ import com.aram.core.designsystem.icon.AramIcons
 import com.aram.core.designsystem.state.UiState
 import com.aram.core.model.UserProfile
 import com.aram.core.network.mock.MockScenario
-import com.aram.feature.budgets.presentation.BudgetsScreen
+import com.aram.feature.budgets.presentation.BudgetsRoute
 import com.aram.feature.dashboard.presentation.DashboardRoute
 import com.aram.feature.onboarding.presentation.AramSplashScreen
 import com.aram.feature.onboarding.presentation.DemoCredentials
@@ -215,7 +215,17 @@ private fun MainScaffold(
                     )
                 }
                 composable(MainTab.Budgets.route) {
-                    BudgetsScreen()
+                    BudgetsRoute(
+                        onCreateBudget = {
+                            scope.launch { snackbarHostState.showSnackbar("Budget editor coming soon") }
+                        },
+                        onOpenBudget = {
+                            scope.launch { snackbarHostState.showSnackbar("Budget editor coming soon") }
+                        },
+                        onOpenSettings = {
+                            scope.launch { snackbarHostState.showSnackbar("Budget settings coming soon") }
+                        },
+                    )
                 }
                 composable(MainTab.Profile.route) {
                     SettingsRoute(
