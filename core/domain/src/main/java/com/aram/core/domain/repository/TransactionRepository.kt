@@ -3,6 +3,7 @@ package com.aram.core.domain.repository
 import com.aram.core.model.Outcome
 import com.aram.core.model.Transaction
 import com.aram.core.domain.transaction.TransactionDraft
+import com.aram.core.domain.transaction.TransactionFilter
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -17,6 +18,9 @@ interface TransactionRepository {
     ): Flow<List<Transaction>>
 
     fun observeRecent(limit: Int): Flow<List<Transaction>>
+
+    /** Cross-month ledger search; criteria compose with AND. */
+    fun search(filter: TransactionFilter): Flow<List<Transaction>>
 
     fun observeTransaction(id: String): Flow<Transaction?>
 

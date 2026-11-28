@@ -16,6 +16,7 @@ import com.aram.core.database.entity.SyncOutboxEntity
 import com.aram.core.database.entity.TransactionEntity
 import com.aram.core.datastore.SessionStore
 import com.aram.core.domain.transaction.TransactionDraft
+import com.aram.core.domain.transaction.TransactionFilter
 import com.aram.core.logging.Logger
 import com.aram.core.model.AccountType
 import com.aram.core.model.AppError
@@ -193,6 +194,36 @@ class TransactionRepositoryImplTest {
     }
 
     @Test
+    fun `search trims the query and forwards every filter`() = runTest {
+        transactionDao.rows["a"] = row("a", occurredAt = 1_500L, note = "Lunch box")
+
+        val result = repository.search(
+            TransactionFilter(
+                query = "  lunch  ",
+                type = TransactionType.EXPENSE,
+                categoryId = "cat",
+                fromInclusive = 1_000L,
+                toExclusive = 2_000L,
+            ),
+        ).first()
+
+        assertEquals(listOf("a"), result.map { it.id })
+        assertEquals("lunch", transactionDao.lastFilter?.query)
+        assertEquals(TransactionType.EXPENSE, transactionDao.lastFilter?.type)
+        assertEquals("cat", transactionDao.lastFilter?.categoryId)
+        assertEquals(1_000L, transactionDao.lastFilter?.fromInclusive)
+        assertEquals(2_000L, transactionDao.lastFilter?.toExclusive)
+    }
+
+    @Test
+    fun `search without a session emits empty`() = runTest {
+        session.userId.value = null
+        transactionDao.rows["a"] = row("a", occurredAt = 1_500L)
+
+        assertTrue(repository.search(TransactionFilter(query = "a")).first().isEmpty())
+    }
+
+    @Test
     fun `ledger lookup returns mapped rows and null when absent`() = runTest {
         accountDao.rows["acc"] = AccountEntity(
             id = "acc",
@@ -250,6 +281,7 @@ class TransactionRepositoryImplTest {
         id: String,
         occurredAt: Long,
         deletedAt: Long? = null,
+        note: String? = null,
     ) = TransactionEntity(
         id = id,
         userId = "user-1",
@@ -259,7 +291,7 @@ class TransactionRepositoryImplTest {
         amountMinor = 1_000L,
         currencyCode = "IRR",
         occurredAt = occurredAt,
-        note = null,
+        note = note,
         transferGroupId = null,
         recurringRuleId = null,
         createdAt = 0L,

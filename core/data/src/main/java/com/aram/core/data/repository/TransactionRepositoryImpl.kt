@@ -21,6 +21,7 @@ import com.aram.core.domain.repository.LedgerLookup
 import com.aram.core.domain.repository.OutboxTrigger
 import com.aram.core.domain.repository.TransactionRepository
 import com.aram.core.domain.transaction.TransactionDraft
+import com.aram.core.domain.transaction.TransactionFilter
 import com.aram.core.logging.Logger
 import com.aram.core.model.Account
 import com.aram.core.model.AppError
@@ -64,6 +65,19 @@ class TransactionRepositoryImpl @Inject constructor(
     @OptIn(ExperimentalCoroutinesApi::class)
     override fun observeRecent(limit: Int): Flow<List<Transaction>> = observeLedger { userId ->
         transactionDao.observeRecent(userId, limit)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun search(filter: TransactionFilter): Flow<List<Transaction>> = observeLedger { userId ->
+        transactionDao.search(
+            userId = userId,
+            noteQuery = filter.query.trim(),
+            type = filter.type?.name,
+            excludeType = filter.excludeType?.name,
+            categoryId = filter.categoryId,
+            fromInclusive = filter.fromInclusive,
+            toExclusive = filter.toExclusive,
+        )
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)

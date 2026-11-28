@@ -23,6 +23,8 @@ import com.aram.core.datastore.SessionToken
 import com.aram.core.datastore.SessionTokenStore
 import com.aram.core.datastore.SyncMetadata
 import com.aram.core.datastore.SyncMetadataStore
+import com.aram.core.domain.transaction.TransactionFilter
+import com.aram.core.model.TransactionType
 import kotlinx.coroutines.flow.Flow
 import com.aram.core.domain.repository.OutboxTrigger
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -190,6 +192,40 @@ class FakeTransactionDao : TransactionDao {
                 .filter { it.userId == userId && it.deletedAt == null }
                 .sortedByDescending { it.occurredAt }
                 .take(limit),
+        )
+    }
+
+    var lastFilter: TransactionFilter? = null
+
+    override fun search(
+        userId: String,
+        noteQuery: String,
+        type: String?,
+        excludeType: String?,
+        categoryId: String?,
+        fromInclusive: Long?,
+        toExclusive: Long?,
+    ): Flow<List<TransactionEntity>> {
+        lastFilter = TransactionFilter(
+            query = noteQuery,
+            type = type?.let(TransactionType::valueOf),
+            excludeType = excludeType?.let(TransactionType::valueOf),
+            categoryId = categoryId,
+            fromInclusive = fromInclusive,
+            toExclusive = toExclusive,
+        )
+        return MutableStateFlow(
+            rows.values
+                .filter { row ->
+                    row.userId == userId && row.deletedAt == null &&
+                        (type == null || row.type == type) &&
+                        (excludeType == null || row.type != excludeType) &&
+                        (categoryId == null || row.categoryId == categoryId) &&
+                        (fromInclusive == null || row.occurredAt >= fromInclusive) &&
+                        (toExclusive == null || row.occurredAt < toExclusive) &&
+                        (noteQuery.isEmpty() || row.note?.contains(noteQuery, ignoreCase = true) == true)
+                }
+                .sortedByDescending { it.occurredAt },
         )
     }
 
