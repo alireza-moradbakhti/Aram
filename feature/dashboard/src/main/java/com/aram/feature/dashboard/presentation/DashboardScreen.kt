@@ -1,12 +1,15 @@
 package com.aram.feature.dashboard.presentation
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -37,14 +40,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
@@ -77,6 +84,7 @@ fun DashboardRoute(
     DashboardScreen(
         displayName = displayName,
         isLoading = state.isLoading,
+        trend = state.trend,
         onSeeAll = onSeeAll,
         modifier = modifier,
     )
@@ -87,6 +95,7 @@ fun DashboardScreen(
     displayName: String,
     modifier: Modifier = Modifier,
     isLoading: Boolean = false,
+    trend: TrendUiState = TrendUiState(),
     onSeeAll: () -> Unit = {},
 ) {
     Column(
@@ -104,7 +113,7 @@ fun DashboardScreen(
             if (loading) {
                 DashboardSkeleton(modifier = Modifier.testTag(SKELETON_TAG))
             } else {
-                DashboardContent(displayName = displayName, onSeeAll = onSeeAll)
+                DashboardContent(displayName = displayName, trend = trend, onSeeAll = onSeeAll)
             }
         }
     }
@@ -113,6 +122,7 @@ fun DashboardScreen(
 @Composable
 private fun DashboardContent(
     displayName: String,
+    trend: TrendUiState,
     onSeeAll: () -> Unit,
 ) {
     val colors = MaterialTheme.aramColors
@@ -252,7 +262,143 @@ private fun DashboardContent(
             Spacer(Modifier.height(14.dp))
             WeekChart()
         }
+
+        Spacer(Modifier.height(12.dp))
+
+        SixMonthsCard(trend = trend)
     }
+}
+
+@Composable
+private fun SixMonthsCard(trend: TrendUiState) {
+    val colors = MaterialTheme.aramColors
+    GlassCard(
+        shape = RoundedCornerShape(22.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(text = "Six months", style = MaterialTheme.typography.titleMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TrendLegendDot(color = colors.primaryHi, label = "In")
+                TrendLegendDot(color = colors.secondaryHi, label = "Out")
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        if (trend.isEmpty) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(96.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "No history yet — your last six months will show here.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.textDim,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        } else {
+            TrendChart(buckets = trend.buckets)
+        }
+    }
+}
+
+@Composable
+private fun TrendLegendDot(color: Color, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(color),
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.aramColors.textFaint,
+        )
+    }
+}
+
+@Composable
+private fun TrendChart(buckets: List<MonthBucket>) {
+    val colors = MaterialTheme.aramColors
+    val reveal by animateFloatAsState(
+        targetValue = 1f,
+        animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing),
+        label = "trend-reveal",
+    )
+    val maxAmount = buckets.maxOf { maxOf(it.incomeMinor, it.expenseMinor) }.coerceAtLeast(1L)
+    val incomeBrush = Brush.verticalGradient(listOf(Color(0xF22FD39A), Color(0x730E9F6E)))
+    val expenseBrush = Brush.verticalGradient(listOf(Color(0xFFFFB95C), Color(0x80D97706)))
+
+    Column(Modifier.fillMaxWidth()) {
+        Canvas(
+            Modifier
+                .fillMaxWidth()
+                .height(TREND_CHART_HEIGHT),
+        ) {
+            val groupWidth = size.width / buckets.size
+            val barWidth = minOf(12.dp.toPx(), groupWidth * 0.2f)
+            val barGap = barWidth * 0.6f
+            val pairWidth = barWidth * 2f + barGap
+            buckets.forEachIndexed { index, bucket ->
+                val pairStart = groupWidth * index + (groupWidth - pairWidth) / 2f
+                drawTrendBar(
+                    brush = incomeBrush,
+                    fraction = bucket.incomeMinor.toFloat() / maxAmount,
+                    x = pairStart,
+                    width = barWidth,
+                    reveal = reveal,
+                )
+                drawTrendBar(
+                    brush = expenseBrush,
+                    fraction = bucket.expenseMinor.toFloat() / maxAmount,
+                    x = pairStart + barWidth + barGap,
+                    width = barWidth,
+                    reveal = reveal,
+                )
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(Modifier.fillMaxWidth()) {
+            buckets.forEach { bucket ->
+                Text(
+                    text = bucket.label,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontSize = 10.sp,
+                    textAlign = TextAlign.Center,
+                    color = colors.textFaint,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+private fun DrawScope.drawTrendBar(
+    brush: Brush,
+    fraction: Float,
+    x: Float,
+    width: Float,
+    reveal: Float,
+) {
+    if (fraction <= 0f) return
+    val height = size.height * fraction.coerceAtMost(1f) * reveal
+    if (height <= 0f) return
+    val radius = minOf(5.dp.toPx(), width / 2f, height / 2f)
+    drawRoundRect(
+        brush = brush,
+        topLeft = Offset(x, size.height - height),
+        size = Size(width, height),
+        cornerRadius = CornerRadius(radius, radius),
+    )
 }
 
 @Composable
@@ -407,6 +553,8 @@ private fun Modifier.shimmerBand(): Modifier {
         )
     }
 }
+
+private val TREND_CHART_HEIGHT = 96.dp
 
 internal const val SKELETON_TAG = "dashboard-skeleton"
 

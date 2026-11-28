@@ -32,6 +32,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":core:domain"))
     implementation(project(":core:designsystem"))
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.bundles.lifecycle)
