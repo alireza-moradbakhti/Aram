@@ -190,7 +190,8 @@ private fun MainScaffold(
                 composable(MainTab.Home.route) {
                     DashboardRoute(
                         displayName = profile.displayName,
-                        onSeeAll = { navigateTo(MainTab.Activity) },
+                        onOpenLedger = { navigateTo(MainTab.Activity) },
+                        onAddTransaction = { navController.navigate(ADD_TRANSACTION_ROUTE) },
                     )
                 }
                 composable(MainTab.Activity.route) {
