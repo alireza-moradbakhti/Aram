@@ -60,24 +60,40 @@ import com.aram.core.designsystem.component.AramBarTone
 import com.aram.core.designsystem.component.AramChip
 import com.aram.core.designsystem.component.AramChipTone
 import com.aram.core.designsystem.component.AramIconButton
+import com.aram.core.designsystem.component.AramPrimaryButton
 import com.aram.core.designsystem.component.AramRing
 import com.aram.core.designsystem.component.AramSectionHeader
 import com.aram.core.designsystem.component.GlassCard
 import com.aram.core.designsystem.component.MoneyLabel
 import com.aram.core.designsystem.icon.AramIcons
+import com.aram.core.designsystem.text.formatMinor
+import com.aram.core.designsystem.text.formatSignedMinor
+import com.aram.core.domain.safetospend.SafeToSpend
+import com.aram.core.domain.safetospend.SafeToSpendBreakdown
+import com.aram.core.money.CurrencyCode
+import com.aram.core.money.Money
+import java.time.YearMonth
+import java.time.format.TextStyle
+import java.util.Locale
+import kotlin.math.abs
+
+private enum class DashboardPhase { Loading, Error, Content }
 
 @Composable
 fun DashboardRoute(
     displayName: String,
     modifier: Modifier = Modifier,
     onSeeAll: () -> Unit = {},
+    onExplainSafeToSpend: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     DashboardScreen(
         displayName = displayName,
-        isLoading = state.isLoading,
+        state = state,
+        onExplainSafeToSpend = onExplainSafeToSpend,
         onSeeAll = onSeeAll,
+        onRetry = viewModel::retry,
         modifier = modifier,
     )
 }
@@ -85,10 +101,17 @@ fun DashboardRoute(
 @Composable
 fun DashboardScreen(
     displayName: String,
+    state: DashboardUiState,
     modifier: Modifier = Modifier,
-    isLoading: Boolean = false,
+    onExplainSafeToSpend: () -> Unit = {},
     onSeeAll: () -> Unit = {},
+    onRetry: () -> Unit = {},
 ) {
+    val phase = when {
+        state.isLoading -> DashboardPhase.Loading
+        state.hasError -> DashboardPhase.Error
+        else -> DashboardPhase.Content
+    }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -97,14 +120,22 @@ fun DashboardScreen(
             .padding(top = 8.dp, bottom = 96.dp),
     ) {
         Crossfade(
-            targetState = isLoading,
+            targetState = phase,
             animationSpec = tween(durationMillis = 320),
             label = "dashboard-load",
-        ) { loading ->
-            if (loading) {
-                DashboardSkeleton(modifier = Modifier.testTag(SKELETON_TAG))
-            } else {
-                DashboardContent(displayName = displayName, onSeeAll = onSeeAll)
+        ) { current ->
+            when (current) {
+                DashboardPhase.Loading ->
+                    DashboardSkeleton(modifier = Modifier.testTag(SKELETON_TAG))
+
+                DashboardPhase.Error -> DashboardError(onRetry = onRetry)
+
+                DashboardPhase.Content -> DashboardContent(
+                    displayName = displayName,
+                    state = state,
+                    onExplainSafeToSpend = onExplainSafeToSpend,
+                    onSeeAll = onSeeAll,
+                )
             }
         }
     }
@@ -113,9 +144,13 @@ fun DashboardScreen(
 @Composable
 private fun DashboardContent(
     displayName: String,
+    state: DashboardUiState,
+    onExplainSafeToSpend: () -> Unit,
     onSeeAll: () -> Unit,
 ) {
     val colors = MaterialTheme.aramColors
+    val currency = state.spent?.currency ?: CurrencyCode.IRR
+    val fractionDigits = currency.fractionDigits
     Column(Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -143,25 +178,40 @@ private fun DashboardContent(
             )
         }
 
-        SafeToSpendHero()
+        SafeToSpendHero(
+            result = state.safeToSpend,
+            onClick = onExplainSafeToSpend,
+        )
 
         Spacer(Modifier.height(16.dp))
 
+        val spent = state.spent ?: Money.zero(currency)
+        val saved = state.saved ?: Money.zero(currency)
+        val spentDelta = spentDeltaLabel(state, currency)
+        val savedDelta = state.previousSaved
+            ?.let { previous -> saved.amountMinor - previous.amountMinor }
+            ?.takeIf { state.previousSaved != null }
+            ?.let { delta -> formatSignedMinor(delta, fractionDigits) }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             StatTile(
                 label = "This month",
-                value = "48,200,000",
-                delta = "6.4% under Oct",
-                deltaUp = false,
+                value = formatMinor(spent.amountMinor, fractionDigits),
+                delta = spentDelta,
+                deltaUp = state.previousSpent == null || spent <= state.previousSpent,
                 modifier = Modifier.weight(1f),
             )
             StatTile(
                 label = "Saved",
-                value = "9,800,000",
-                delta = "+1,200,000",
-                deltaUp = true,
+                value = formatMinor(saved.amountMinor, fractionDigits),
+                delta = savedDelta,
+                deltaUp = (savedDelta?.startsWith("\u2212") != true),
                 modifier = Modifier.weight(1f),
             )
+        }
+
+        if (state.isEmpty) {
+            Spacer(Modifier.height(12.dp))
+            EmptyFirstRunCard()
         }
 
         Spacer(Modifier.height(12.dp))
@@ -252,6 +302,105 @@ private fun DashboardContent(
             Spacer(Modifier.height(14.dp))
             WeekChart()
         }
+    }
+}
+
+private fun spentDeltaLabel(state: DashboardUiState, currency: CurrencyCode): String? {
+    val spent = state.spent ?: return null
+    val previous = state.previousSpent ?: return null
+    if (previous.amountMinor <= 0) return null
+    val monthLabel = state.month
+        ?.minusMonths(1)
+        ?.month
+        ?.getDisplayName(TextStyle.SHORT, Locale.getDefault())
+        ?: return null
+    val diff = previous.amountMinor - spent.amountMinor
+    val percent = abs(diff) * 100.0 / previous.amountMinor
+    val direction = if (diff >= 0) "under" else "over"
+    val percentLabel = String.format(
+        Locale.US,
+        if (percent >= 10) "%.0f" else "%.1f",
+        percent,
+    )
+    return "$percentLabel% $direction $monthLabel"
+}
+
+@Composable
+private fun EmptyFirstRunCard() {
+    val colors = MaterialTheme.aramColors
+    GlassCard(shape = RoundedCornerShape(22.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(colors.surface2)
+                    .border(1.dp, colors.border, RoundedCornerShape(14.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = AramIcons.add,
+                    contentDescription = null,
+                    tint = colors.primaryHi,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "No activity this month",
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Text(
+                    text = "Add your first expense to unlock your safe-to-spend.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.textFaint,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DashboardError(
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = MaterialTheme.aramColors
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = 96.dp, bottom = 48.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(colors.surface1)
+                .border(1.dp, colors.border, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = AramIcons.notifications,
+                contentDescription = null,
+                tint = colors.textDim,
+                modifier = Modifier.size(24.dp),
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        Text(
+            text = "Couldn't load your dashboard",
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "Check your connection and try again.",
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.textDim,
+        )
+        Spacer(Modifier.height(20.dp))
+        AramPrimaryButton(text = "Try again", onClick = onRetry)
     }
 }
 
@@ -409,11 +558,27 @@ private fun Modifier.shimmerBand(): Modifier {
 }
 
 internal const val SKELETON_TAG = "dashboard-skeleton"
+internal const val HERO_TAG = "dashboard-safe-to-spend"
 
 @Composable
-private fun SafeToSpendHero() {
+private fun SafeToSpendHero(
+    result: SafeToSpend?,
+    onClick: () -> Unit,
+) {
     val colors = MaterialTheme.aramColors
     val shape = RoundedCornerShape(28.dp)
+    val total = result?.total ?: Money.zero(CurrencyCode.IRR)
+    val fractionDigits = total.currency.fractionDigits
+    val onTrack = total.amountMinor > 0
+    val daysRemaining = result?.daysRemaining ?: 1
+    val daily = result?.dailyAmount ?: total
+    val incomeMinor = result?.breakdown?.income?.amountMinor ?: 0L
+    val spentMinor = result?.breakdown?.spent?.amountMinor?.let { -it } ?: 0L
+    val incomeShare = if (incomeMinor > 0) {
+        ((spentMinor * 100.0) / incomeMinor).toInt().coerceIn(0, 100)
+    } else {
+        null
+    }
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -439,7 +604,9 @@ private fun SafeToSpendHero() {
                     style = Stroke(width = 26.dp.toPx()),
                 )
             }
-            .padding(20.dp),
+            .clickable(onClick = onClick)
+            .padding(20.dp)
+            .testTag(HERO_TAG),
     ) {
         Column {
             Row(
@@ -452,18 +619,21 @@ private fun SafeToSpendHero() {
                     style = MaterialTheme.typography.labelLarge,
                     color = Color(0xDBFFFFFF),
                 )
-                HeroPill(text = "On track", icon = AramIcons.check)
+                HeroPill(
+                    text = if (onTrack) "On track" else "At limit",
+                    icon = AramIcons.check,
+                )
             }
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(
-                    text = "12,400,000",
+                    text = formatMinor(total.amountMinor, fractionDigits),
                     style = AramTextStyles.heroAmount,
                     color = Color.White,
                 )
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    text = "IRR",
+                    text = total.currency.isoCode,
                     style = MaterialTheme.typography.labelMedium,
                     letterSpacing = 1.sp,
                     color = Color(0xCCFFFFFF),
@@ -472,7 +642,8 @@ private fun SafeToSpendHero() {
             }
             Spacer(Modifier.height(2.dp))
             Text(
-                text = "≈ 412,000 a day for the next 30 days",
+                text = "\u2248 ${formatMinor(daily.amountMinor, fractionDigits)} a day for the next " +
+                    if (daysRemaining == 1) "day" else "$daysRemaining days",
                 style = MaterialTheme.typography.bodySmall,
                 color = Color(0xD1FFFFFF),
             )
@@ -481,10 +652,12 @@ private fun SafeToSpendHero() {
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                HeroPill(text = "68% of budget", icon = AramIcons.trending)
+                if (incomeShare != null) {
+                    HeroPill(text = "$incomeShare% of income", icon = AramIcons.trending)
+                }
                 Spacer(Modifier.weight(1f))
                 Text(
-                    text = "22 days left",
+                    text = if (daysRemaining == 1) "1 day left" else "$daysRemaining days left",
                     style = MaterialTheme.typography.labelMedium,
                     color = Color(0xE6FFFFFF),
                 )
@@ -524,7 +697,7 @@ private fun HeroPill(
 private fun StatTile(
     label: String,
     value: String,
-    delta: String,
+    delta: String?,
     deltaUp: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -544,19 +717,21 @@ private fun StatTile(
         )
         Spacer(Modifier.height(6.dp))
         Text(text = value, style = AramTextStyles.statValue)
-        Spacer(Modifier.height(4.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = if (deltaUp) AramIcons.chevronUp else AramIcons.chevronDown,
-                contentDescription = null,
-                tint = if (deltaUp) colors.primaryHi else colors.secondaryHi,
-                modifier = Modifier.size(12.dp),
-            )
-            Text(
-                text = delta,
-                style = MaterialTheme.typography.labelSmall,
-                color = if (deltaUp) colors.primaryHi else colors.secondaryHi,
-            )
+        if (delta != null) {
+            Spacer(Modifier.height(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = if (deltaUp) AramIcons.chevronUp else AramIcons.chevronDown,
+                    contentDescription = null,
+                    tint = if (deltaUp) colors.primaryHi else colors.secondaryHi,
+                    modifier = Modifier.size(12.dp),
+                )
+                Text(
+                    text = delta,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (deltaUp) colors.primaryHi else colors.secondaryHi,
+                )
+            }
         }
     }
 }
@@ -714,9 +889,45 @@ private fun WeekChart() {
 
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
-private fun DashboardScreenPreview() {
-    AramTheme {
-        DashboardScreen(displayName = "Aram")
+private fun DashboardContentPreview() {
+    AramTheme(darkTheme = false) {
+        DashboardScreen(displayName = "Ava Bennett", state = sampleDashboardState())
+    }
+}
+
+@Preview(name = "Content · dark", showBackground = true, showSystemUi = true)
+@Composable
+private fun DashboardContentDarkPreview() {
+    AramTheme(darkTheme = true) {
+        DashboardScreen(displayName = "Ava Bennett", state = sampleDashboardState())
+    }
+}
+
+@Preview(name = "Empty · light", showBackground = true, showSystemUi = true)
+@Composable
+private fun DashboardEmptyPreview() {
+    AramTheme(darkTheme = false) {
+        DashboardScreen(
+            displayName = "Ava Bennett",
+            state = sampleDashboardState().copy(
+                isEmpty = true,
+                spent = Money.zero(CurrencyCode.IRR),
+                saved = Money.zero(CurrencyCode.IRR),
+                previousSpent = null,
+                previousSaved = null,
+            ),
+        )
+    }
+}
+
+@Preview(name = "Error · light", showBackground = true, showSystemUi = true)
+@Composable
+private fun DashboardErrorPreview() {
+    AramTheme(darkTheme = false) {
+        DashboardScreen(
+            displayName = "Ava Bennett",
+            state = DashboardUiState(isLoading = false, hasError = true),
+        )
     }
 }
 
@@ -724,7 +935,7 @@ private fun DashboardScreenPreview() {
 @Composable
 private fun DashboardSkeletonLightPreview() {
     AramTheme(darkTheme = false) {
-        DashboardScreen(displayName = "Aram", isLoading = true)
+        DashboardScreen(displayName = "Ava Bennett", state = DashboardUiState(isLoading = true))
     }
 }
 
@@ -732,6 +943,35 @@ private fun DashboardSkeletonLightPreview() {
 @Composable
 private fun DashboardSkeletonDarkPreview() {
     AramTheme(darkTheme = true) {
-        DashboardScreen(displayName = "Aram", isLoading = true)
+        DashboardScreen(displayName = "Ava Bennett", state = DashboardUiState(isLoading = true))
     }
+}
+
+private fun sampleDashboardState(): DashboardUiState {
+    val month = YearMonth.of(2026, 11)
+    val currency = CurrencyCode.IRR
+    val income = Money(85_000_000, currency)
+    val spent = Money(48_200_000, currency)
+    val total = Money(36_800_000, currency)
+    return DashboardUiState(
+        isLoading = false,
+        month = month,
+        safeToSpend = SafeToSpend(
+            total = total,
+            daysRemaining = 15,
+            dailyAmount = Money(2_453_333, currency),
+            breakdown = SafeToSpendBreakdown(
+                income = income,
+                spent = Money(-spent.amountMinor, currency),
+                plannedBudgets = Money.zero(currency),
+                upcomingBills = Money.zero(currency),
+                clampAdjustment = Money.zero(currency),
+                total = total,
+            ),
+        ),
+        spent = spent,
+        saved = income - spent,
+        previousSpent = Money(51_500_000, currency),
+        previousSaved = Money(33_500_000, currency),
+    )
 }
