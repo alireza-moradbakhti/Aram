@@ -1,5 +1,6 @@
 package com.aram.feature.settings.presentation
 
+import app.cash.turbine.test
 import com.aram.core.domain.repository.LedgerSync
 import com.aram.core.domain.repository.OutboxSnapshot
 import com.aram.core.domain.repository.OutboxSync
@@ -57,6 +58,29 @@ class SettingsViewModelTest {
         assertEquals(1, ui.failed)
         assertEquals(now, ui.nowMillis)
         job.cancel()
+    }
+
+    @Test
+    fun `syncStatus streams refreshing then a failed sync with the queue`() = runTest(dispatcher) {
+        val viewModel = SettingsViewModel(ledger, outbox, clock)
+
+        viewModel.syncStatus.test {
+            advanceUntilIdle()
+            assertEquals(SyncStatus.IDLE, awaitItem().status)
+
+            ledger.state.value = SyncState(SyncStatus.REFRESHING)
+            advanceUntilIdle()
+            assertEquals(SyncStatus.REFRESHING, awaitItem().status)
+
+            ledger.state.value = SyncState(SyncStatus.FAILED, clock.millis())
+            outbox.snapshot.value = OutboxSnapshot(pending = 1, failed = 2)
+            advanceUntilIdle()
+            val failed = awaitItem()
+            assertEquals(SyncStatus.FAILED, failed.status)
+            assertEquals(1, failed.pending)
+            assertEquals(2, failed.failed)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test

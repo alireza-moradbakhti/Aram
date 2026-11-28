@@ -1,5 +1,6 @@
 package com.aram.feature.transactions.presentation
 
+import app.cash.turbine.test
 import com.aram.core.domain.repository.LedgerDirectory
 import com.aram.core.domain.repository.LedgerSync
 import com.aram.core.domain.repository.OutboxSnapshot
@@ -65,6 +66,44 @@ class TransactionsViewModelTest {
     }
 
     private fun viewModel() = TransactionsViewModel(repository, directory, ledgerSync, outbox, clock)
+
+    @Test
+    fun `uiState streams loading then the loaded month`() = runTest(dispatcher) {
+        repository.rows.value = listOf(
+            expense("a", 18_000, "food", "2026-10-12T09:12:00Z"),
+        )
+        val viewModel = viewModel()
+
+        viewModel.uiState.test {
+            assertTrue(awaitItem().loading)
+            advanceUntilIdle()
+            val loaded = awaitItem()
+            assertTrue(!loaded.loading)
+            assertEquals(listOf("a"), loaded.groups.flatMap { it.transactions }.map { it.id })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a scope change streams the filtered rows`() = runTest(dispatcher) {
+        repository.rows.value = listOf(
+            expense("expense", 18_000, "food", "2026-10-12T09:12:00Z"),
+            income("income", 8_500_000, "salary", "2026-10-12T08:00:00Z"),
+        )
+        val viewModel = viewModel()
+
+        viewModel.uiState.test {
+            awaitItem()
+            advanceUntilIdle()
+            awaitItem()
+            viewModel.onScopeChange(TransactionScope.INCOME)
+            advanceUntilIdle()
+
+            val filtered = awaitItem()
+            assertEquals(listOf("income"), filtered.groups.flatMap { it.transactions }.map { it.id })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 
     @Test
     fun `rows group by day newest first with newest rows first`() = runTest(dispatcher) {
