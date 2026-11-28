@@ -27,6 +27,7 @@ dependencies {
     implementation(project(":core:domain"))
     implementation(project(":core:logging"))
     implementation(project(":core:model"))
+    implementation(project(":core:money"))
     implementation(project(":core:network"))
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)

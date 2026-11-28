@@ -5,6 +5,7 @@ import com.aram.core.data.outbox.OutboxSyncImpl
 import com.aram.core.data.outbox.WorkManagerOutboxTrigger
 import com.aram.core.data.repository.AccountBalanceRepositoryImpl
 import com.aram.core.data.repository.AuthRepositoryImpl
+import com.aram.core.data.repository.BudgetRepositoryImpl
 import com.aram.core.data.repository.LedgerSyncRepositoryImpl
 import com.aram.core.data.repository.TransactionRepositoryImpl
 import com.aram.core.data.sync.SyncScheduler
@@ -15,6 +16,7 @@ import com.aram.core.datastore.SyncMetadataDataStore
 import com.aram.core.datastore.SyncMetadataStore
 import com.aram.core.domain.repository.AccountBalanceRepository
 import com.aram.core.domain.repository.AuthRepository
+import com.aram.core.domain.repository.BudgetRepository
 import com.aram.core.domain.repository.LedgerDirectory
 import com.aram.core.domain.repository.LedgerLookup
 import com.aram.core.domain.repository.LedgerSync
@@ -66,6 +68,10 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindTransactionRepository(implementation: TransactionRepositoryImpl): TransactionRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindBudgetRepository(implementation: BudgetRepositoryImpl): BudgetRepository
 
     @Binds
     @Singleton
