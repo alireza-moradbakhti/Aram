@@ -47,6 +47,12 @@ abstract class LedgerWriteDao {
     )
     protected abstract suspend fun deleteRow(userId: String, id: String, deletedAt: Long): Int
 
+    @Query(
+        "UPDATE transactions SET deletedAt = NULL, updatedAt = :updatedAt, pendingPush = 1 " +
+            "WHERE userId = :userId AND id = :id AND deletedAt IS NOT NULL",
+    )
+    protected abstract suspend fun restoreRow(userId: String, id: String, updatedAt: Long): Int
+
     @Transaction
     open suspend fun createWithOutbox(transaction: TransactionEntity, entry: SyncOutboxEntity) {
         upsertTransaction(transaction)
@@ -91,6 +97,18 @@ abstract class LedgerWriteDao {
         entry: SyncOutboxEntity,
     ): Int {
         val changed = deleteRow(userId, id, deletedAt)
+        if (changed > 0) insertOutbox(entry)
+        return changed
+    }
+
+    @Transaction
+    open suspend fun restoreWithOutbox(
+        userId: String,
+        id: String,
+        updatedAt: Long,
+        entry: SyncOutboxEntity,
+    ): Int {
+        val changed = restoreRow(userId, id, updatedAt)
         if (changed > 0) insertOutbox(entry)
         return changed
     }

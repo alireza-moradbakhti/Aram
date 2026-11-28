@@ -78,6 +78,9 @@ interface TransactionDao {
     )
     suspend fun findById(userId: String, id: String): TransactionEntity?
 
+    @Query("SELECT * FROM transactions WHERE userId = :userId AND id = :id")
+    suspend fun findByIdIncludingDeleted(userId: String, id: String): TransactionEntity?
+
     @Query(
         "UPDATE transactions SET accountId = :accountId, categoryId = :categoryId, " +
             "type = :type, amountMinor = :amountMinor, currencyCode = :currencyCode, " +
@@ -102,6 +105,12 @@ interface TransactionDao {
             "WHERE userId = :userId AND id = :id AND deletedAt IS NULL",
     )
     suspend fun softDelete(userId: String, id: String, deletedAt: Long): Int
+
+    @Query(
+        "UPDATE transactions SET deletedAt = NULL, updatedAt = :updatedAt, pendingPush = 1 " +
+            "WHERE userId = :userId AND id = :id AND deletedAt IS NOT NULL",
+    )
+    suspend fun restore(userId: String, id: String, updatedAt: Long): Int
 
     @Query(
         "SELECT COALESCE(SUM(amountMinor), 0) FROM transactions " +
