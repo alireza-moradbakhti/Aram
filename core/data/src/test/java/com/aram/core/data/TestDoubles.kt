@@ -250,11 +250,39 @@ class FakeBudgetDao : BudgetDao {
     val rows = linkedMapOf<String, BudgetEntity>()
 
     override suspend fun upsert(budget: BudgetEntity) {
+        // Mirrors the unique (userId, categoryId, periodStartEpochDay) index.
+        rows.entries.removeAll { (id, row) ->
+            id != budget.id &&
+                row.userId == budget.userId &&
+                row.categoryId == budget.categoryId &&
+                row.periodStartEpochDay == budget.periodStartEpochDay
+        }
         rows[budget.id] = budget
     }
 
+    override suspend fun find(
+        userId: String,
+        categoryId: String,
+        periodStartEpochDay: Long,
+    ): BudgetEntity? = rows.values.firstOrNull {
+        it.userId == userId &&
+            it.categoryId == categoryId &&
+            it.periodStartEpochDay == periodStartEpochDay
+    }
+
     override fun observeForPeriod(userId: String, periodStartEpochDay: Long): Flow<List<BudgetEntity>> =
-        MutableStateFlow(rows.values.filter { it.userId == userId && it.periodStartEpochDay == periodStartEpochDay })
+        MutableStateFlow(
+            rows.values.filter {
+                it.userId == userId && it.deletedAt == null &&
+                    it.periodStartEpochDay == periodStartEpochDay
+            },
+        )
+
+    override suspend fun softDelete(userId: String, id: String, deletedAt: Long): Int {
+        val row = rows[id]?.takeIf { it.userId == userId && it.deletedAt == null } ?: return 0
+        rows[id] = row.copy(deletedAt = deletedAt, updatedAt = deletedAt)
+        return 1
+    }
 
     override suspend fun deleteByUser(userId: String) {
         rows.values.removeAll { it.userId == userId }
@@ -304,9 +332,9 @@ class FakeRecurringRuleDao : RecurringRuleDao {
     }
 }
 
-class FakeSessionStore : SessionStore {
+class FakeSessionStore(initialUserId: String? = null) : SessionStore {
 
-    private val state = MutableStateFlow<String?>(null)
+    private val state = MutableStateFlow(initialUserId)
 
     val value: String? get() = state.value
 
