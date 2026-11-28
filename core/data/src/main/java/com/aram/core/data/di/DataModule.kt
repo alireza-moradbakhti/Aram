@@ -3,6 +3,7 @@ package com.aram.core.data.di
 import com.aram.core.data.http.SessionTokenProvider
 import com.aram.core.data.outbox.OutboxSyncImpl
 import com.aram.core.data.outbox.WorkManagerOutboxTrigger
+import com.aram.core.data.repository.AccountBalanceRepositoryImpl
 import com.aram.core.data.repository.AuthRepositoryImpl
 import com.aram.core.data.repository.BudgetRepositoryImpl
 import com.aram.core.data.repository.LedgerSyncRepositoryImpl
@@ -13,6 +14,7 @@ import com.aram.core.datastore.SessionDataStore
 import com.aram.core.datastore.SessionStore
 import com.aram.core.datastore.SyncMetadataDataStore
 import com.aram.core.datastore.SyncMetadataStore
+import com.aram.core.domain.repository.AccountBalanceRepository
 import com.aram.core.domain.repository.AuthRepository
 import com.aram.core.domain.repository.BudgetRepository
 import com.aram.core.domain.repository.LedgerDirectory
@@ -70,6 +72,12 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindBudgetRepository(implementation: BudgetRepositoryImpl): BudgetRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAccountBalanceRepository(
+        implementation: AccountBalanceRepositoryImpl,
+    ): AccountBalanceRepository
 
     @Binds
     @Singleton

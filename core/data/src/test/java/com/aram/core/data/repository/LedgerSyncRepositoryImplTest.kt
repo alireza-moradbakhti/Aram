@@ -37,10 +37,12 @@ import java.time.YearMonth
 import java.time.ZoneOffset
 import java.util.UUID
 import io.ktor.client.engine.mock.MockEngine
+import app.cash.turbine.test
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -69,6 +71,35 @@ class LedgerSyncRepositoryImplTest {
         assertEquals(month.toString(), harness.metadata.value?.month)
         assertEquals(SyncStatus.IDLE, harness.state().status)
         assertEquals(harness.clock.millis(), harness.metadata.value?.lastSyncedAtMillis)
+    }
+
+    @Test
+    fun `state streams refreshing then idle on a completed pull`() = runTest {
+        val harness = harness()
+
+        harness.repository.state.test {
+            assertEquals(SyncStatus.IDLE, awaitItem().status)
+            val refresh = launch { harness.repository.refresh(month) }
+            assertEquals(SyncStatus.REFRESHING, awaitItem().status)
+            assertEquals(SyncStatus.IDLE, awaitItem().status)
+            refresh.join()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `state streams refreshing then failed on a server error`() = runTest {
+        val harness = harness()
+        harness.scenarios.select(MockScenario.SERVER_ERROR)
+
+        harness.repository.state.test {
+            assertEquals(SyncStatus.IDLE, awaitItem().status)
+            val refresh = launch { harness.repository.refresh(month) }
+            assertEquals(SyncStatus.REFRESHING, awaitItem().status)
+            assertEquals(SyncStatus.FAILED, awaitItem().status)
+            refresh.join()
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
