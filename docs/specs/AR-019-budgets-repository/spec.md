@@ -28,9 +28,10 @@ Goals
 
 Non-goals
 
-- Outbox/sync: budgets are not in the backend or sync contract yet, so writes
-  stay local (no outbox entry). When the API grows budgets, a follow-up wires
-  them into sync like transactions.
+- Outbox/sync: the backend exposes budgets (`/budgets`, `/budgets/overview`,
+  `SyncPullDto.budgets`) but the client has no budget service and the pull/push
+  sync path ignores them, so writes stay local (no outbox entry). A follow-up
+  wires budgets into sync like transactions.
 - UI. AR-020 builds the Budgets screen on top of this repository.
 
 ## Acceptance criteria
@@ -103,8 +104,9 @@ rather than duplicates.
 
 ## Risks and open questions
 
-- Budgets are local-only until the backend grows them; a future sync task must
-  reconcile the deterministic id scheme with whatever the API returns.
+- The client is local-only for budgets until a sync task maps
+  `SyncPullDto.budgets` and pushes writes; that task must reconcile the
+  deterministic id scheme with whatever the API returns.
 - `Clock` zone drives the month range; if the user changes timezone mid-month
   the spend window shifts by the offset, which is acceptable for a personal
   ledger (same rule as the rest of the app).

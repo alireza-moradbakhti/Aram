@@ -37,8 +37,9 @@
 - Audit timestamps (`createdAt`/`updatedAt`/`deletedAt`) use
   `System.currentTimeMillis()`, not the injected `Clock` (the clock is for
   date math — month windows here).
-- No outbox for budgets yet: the backend has no budget endpoints / sync
-  entries, so no `SyncOutboxEntity` rows are queued.
+- No outbox for budgets yet: the backend exposes budget endpoints and
+  `SyncPullDto.budgets`, but no client budget service exists and the sync
+  worker ignores that field, so an outbox row would park forever.
 
 ## Dependencies
 
