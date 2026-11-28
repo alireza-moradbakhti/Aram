@@ -1,9 +1,11 @@
 package com.aram.core.data.mapper
 
+import com.aram.core.database.dao.AccountBalanceRow
 import com.aram.core.database.entity.AccountEntity
 import com.aram.core.database.entity.CategoryEntity
 import com.aram.core.database.entity.TransactionEntity
 import com.aram.core.model.Account
+import com.aram.core.model.AccountBalance
 import com.aram.core.model.AccountType
 import com.aram.core.model.Category
 import com.aram.core.model.CategoryKind
@@ -46,4 +48,10 @@ internal fun CategoryEntity.toModel(): Category = Category(
     colorArgb = colorArgb,
     iconKey = iconKey,
     archived = archived,
+)
+
+internal fun AccountBalanceRow.toModel(): AccountBalance = AccountBalance(
+    accountId = accountId,
+    currencyCode = currencyCode,
+    balanceMinor = balanceMinor,
 )

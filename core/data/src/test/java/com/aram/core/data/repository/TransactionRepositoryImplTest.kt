@@ -162,6 +162,44 @@ class TransactionRepositoryImplTest {
     }
 
     @Test
+    fun `restore clears the tombstone and queues an update`() = runTest {
+        val id = (repository.create(draft()) as Outcome.Success).value.id
+        repository.softDelete(id)
+        val tombstone = transactionDao.rows.getValue(id)
+        val queuedBefore = outbox.rows.size
+
+        val result = repository.restore(id)
+
+        assertTrue(result is Outcome.Success)
+        val row = transactionDao.rows.getValue(id)
+        assertNull(row.deletedAt)
+        assertTrue(row.updatedAt >= tombstone.updatedAt)
+        assertTrue(row.pendingPush)
+        assertEquals(queuedBefore + 1, outbox.rows.size)
+        val entry = outbox.rows.values.last()
+        assertEquals(SyncOutboxEntity.OP_UPDATE, entry.op)
+        assertEquals(id, entry.entityId)
+    }
+
+    @Test
+    fun `restore of a live row queues nothing`() = runTest {
+        val id = (repository.create(draft()) as Outcome.Success).value.id
+        val queuedBefore = outbox.rows.size
+
+        val result = repository.restore(id)
+
+        assertTrue(result is Outcome.Success)
+        assertEquals(queuedBefore, outbox.rows.size)
+    }
+
+    @Test
+    fun `restore of an unknown row is not found`() = runTest {
+        val result = repository.restore("missing")
+
+        assertEquals(AppError.NotFound, (result as Outcome.Failure).error)
+    }
+
+    @Test
     fun `observeTransactions returns the requested range newest first`() = runTest {
         transactionDao.rows["a"] = row("a", occurredAt = 1_000L)
         transactionDao.rows["b"] = row("b", occurredAt = 2_000L)

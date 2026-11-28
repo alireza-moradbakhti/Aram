@@ -495,6 +495,8 @@ class TransactionsViewModelTest {
             Outcome.Failure(AppError.Storage())
 
         override suspend fun softDelete(id: String): Outcome<Unit> = Outcome.Success(Unit)
+
+        override suspend fun restore(id: String): Outcome<Unit> = Outcome.Success(Unit)
     }
 
     private class FakeLedgerSync(private val events: MutableList<String>) : LedgerSync {

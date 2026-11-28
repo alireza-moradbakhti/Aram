@@ -233,6 +233,46 @@ class TransactionRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun restore(id: String): Outcome<Unit> {
+        val userId = when (val result = currentUserId()) {
+            is Outcome.Success -> result.value
+            is Outcome.Failure -> return result
+        }
+        return safeOutcome(
+            component = COMPONENT,
+            operation = "restore",
+            logger = logger,
+            mapError = { it.toStorageAwareError() },
+        ) {
+            withContext(dispatchers.io) {
+                val now = System.currentTimeMillis()
+                val existing = transactionDao.findByIdIncludingDeleted(userId, id)
+                    ?: throw RowNotFound()
+                if (existing.deletedAt == null) return@withContext
+                val restored = existing.copy(deletedAt = null, updatedAt = now, pendingPush = true)
+                val changed = writeDao.restoreWithOutbox(
+                    userId = userId,
+                    id = id,
+                    updatedAt = now,
+                    entry = outboxEntry(
+                        userId = userId,
+                        entity = restored,
+                        op = SyncOutboxEntity.OP_UPDATE,
+                        categorySlug = categorySlug(
+                            existing.categoryId,
+                            existing.categoryId?.let { categoryDao.findById(userId, it) },
+                        ),
+                        now = now,
+                    ),
+                )
+                if (changed == 0) {
+                    throw RowNotFound()
+                }
+                outboxTrigger.schedule()
+            }
+        }
+    }
+
     override suspend fun account(id: String): Outcome<Account?> {
         val userId = when (val result = currentUserId()) {
             is Outcome.Success -> result.value

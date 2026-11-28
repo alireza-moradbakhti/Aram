@@ -156,6 +156,48 @@ class TransactionsScreenTest {
         assertEquals(1, clears)
     }
 
+    @Test
+    fun `tapping a row opens that transaction`() {
+        var openedId: String? = null
+        compose.setContent {
+            AramTheme(darkTheme = true) {
+                TransactionsScreen(
+                    state = state(
+                        groups = listOf(
+                            DayGroupUi(
+                                date = LocalDate.of(2026, 11, 20),
+                                totalMinor = 12_000,
+                                transactions = listOf(
+                                    TransactionRowUi(
+                                        id = "tx-1",
+                                        title = "Groceries",
+                                        detail = "Food & Drinks",
+                                        categoryIconKey = "food",
+                                        amountMinor = 12_000,
+                                        fractionDigits = 2,
+                                        incoming = false,
+                                        pendingSync = false,
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                    onPreviousMonth = {},
+                    onNextMonth = {},
+                    onScopeChange = {},
+                    onAddTransaction = {},
+                    onTransactionClick = { openedId = it },
+                    onRefresh = {},
+                    onRetryQueued = {},
+                )
+            }
+        }
+
+        compose.onNodeWithText("Groceries").performClick()
+
+        assertEquals("tx-1", openedId)
+    }
+
     private fun state(
         outbox: OutboxSnapshot = OutboxSnapshot(),
         groups: List<DayGroupUi> = emptyList(),

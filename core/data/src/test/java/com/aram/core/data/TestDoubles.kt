@@ -1,5 +1,6 @@
 package com.aram.core.data
 
+import com.aram.core.database.dao.AccountBalanceRow
 import com.aram.core.database.dao.AccountDao
 import com.aram.core.database.dao.BudgetDao
 import com.aram.core.database.dao.CategoryDao
@@ -28,6 +29,7 @@ import com.aram.core.model.TransactionType
 import kotlinx.coroutines.flow.Flow
 import com.aram.core.domain.repository.OutboxTrigger
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 
 class FakeUserDao : UserDao {
 
@@ -91,6 +93,9 @@ class FakeCategoryDao : CategoryDao {
 class FakeAccountDao : AccountDao {
 
     val rows = linkedMapOf<String, AccountEntity>()
+    val balance = MutableStateFlow<AccountBalanceRow?>(null)
+    var balanceError: Throwable? = null
+    var lastBalanceUserId: String? = null
 
     override suspend fun upsertAll(accounts: List<AccountEntity>) {
         accounts.forEach { rows[it.id] = it }
@@ -98,6 +103,12 @@ class FakeAccountDao : AccountDao {
 
     override fun observeByUser(userId: String): Flow<List<AccountEntity>> =
         MutableStateFlow(rows.values.filter { it.userId == userId && it.deletedAt == null })
+
+    override fun observeBalance(userId: String, accountId: String): Flow<AccountBalanceRow?> {
+        lastBalanceUserId = userId
+        val error = balanceError
+        return if (error == null) balance else flow { throw error }
+    }
 
     override suspend fun findById(userId: String, id: String): AccountEntity? =
         rows[id]?.takeIf { it.userId == userId && it.deletedAt == null }
@@ -235,6 +246,9 @@ class FakeTransactionDao : TransactionDao {
     override suspend fun findById(userId: String, id: String): TransactionEntity? =
         rows[id]?.takeIf { it.userId == userId && it.deletedAt == null }
 
+    override suspend fun findByIdIncludingDeleted(userId: String, id: String): TransactionEntity? =
+        rows[id]?.takeIf { it.userId == userId }
+
     override suspend fun update(
         userId: String,
         id: String,
@@ -266,6 +280,13 @@ class FakeTransactionDao : TransactionDao {
         val current = rows[id] ?: return 0
         if (current.userId != userId || current.deletedAt != null) return 0
         rows[id] = current.copy(deletedAt = deletedAt, updatedAt = deletedAt)
+        return 1
+    }
+
+    override suspend fun restore(userId: String, id: String, updatedAt: Long): Int {
+        val current = rows[id] ?: return 0
+        if (current.userId != userId || current.deletedAt == null) return 0
+        rows[id] = current.copy(deletedAt = null, updatedAt = updatedAt)
         return 1
     }
 
@@ -480,6 +501,9 @@ class FakeLedgerWriteDao(
 
     override suspend fun deleteRow(userId: String, id: String, deletedAt: Long): Int =
         transactions.softDelete(userId, id, deletedAt)
+
+    override suspend fun restoreRow(userId: String, id: String, updatedAt: Long): Int =
+        transactions.restore(userId, id, updatedAt)
 }
 
 class FakeOutboxTrigger : OutboxTrigger {

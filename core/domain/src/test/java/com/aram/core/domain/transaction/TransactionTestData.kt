@@ -75,11 +75,13 @@ internal class FakeTransactionRepository : TransactionRepository {
     val created = mutableListOf<TransactionDraft>()
     val updated = mutableListOf<Pair<String, TransactionDraft>>()
     val deleted = mutableListOf<String>()
+    val restored = mutableListOf<String>()
 
     var createResult: (TransactionDraft) -> Outcome<Transaction> = { Outcome.Success(testTransaction(draft = it)) }
     var updateResult: (String, TransactionDraft) -> Outcome<Transaction> =
         { id, draft -> Outcome.Success(testTransaction(id = id, draft = draft)) }
     var deleteResult: Outcome<Unit> = Outcome.Success(Unit)
+    var restoreResult: Outcome<Unit> = Outcome.Success(Unit)
 
     override fun observeTransactions(
         fromInclusive: Long,
@@ -105,6 +107,11 @@ internal class FakeTransactionRepository : TransactionRepository {
     override suspend fun softDelete(id: String): Outcome<Unit> {
         deleted += id
         return deleteResult
+    }
+
+    override suspend fun restore(id: String): Outcome<Unit> {
+        restored += id
+        return restoreResult
     }
 }
 
