@@ -1,5 +1,6 @@
 package com.aram.feature.transactions.presentation
 
+import app.cash.turbine.test
 import com.aram.core.designsystem.state.SubmitState
 import com.aram.core.domain.repository.LedgerDirectory
 import com.aram.core.domain.repository.LedgerLookup
@@ -16,6 +17,7 @@ import com.aram.core.model.Outcome
 import com.aram.core.model.Transaction
 import com.aram.core.model.TransactionType
 import com.aram.core.money.CurrencyCode
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -24,6 +26,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -162,6 +165,53 @@ class AddTransactionViewModelTest {
     }
 
     @Test
+    fun `uiState streams submitting then saved`() = runTest(dispatcher) {
+        val gate = CompletableDeferred<Unit>()
+        repository.createGate = gate
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.uiState.test {
+            awaitItem()
+            viewModel.onAmountChange("5")
+            assertEquals("5", awaitItem().amountInput)
+
+            viewModel.onSave()
+            runCurrent()
+            assertEquals(SubmitState.Submitting, awaitItem().submitState)
+
+            gate.complete(Unit)
+            advanceUntilIdle()
+            assertTrue(awaitItem().saved)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `uiState streams submitting then failed without losing input`() = runTest(dispatcher) {
+        repository.createResult = Outcome.Failure(AppError.Storage())
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.uiState.test {
+            awaitItem()
+            viewModel.onAmountChange("5")
+            assertEquals("5", awaitItem().amountInput)
+
+            viewModel.onSave()
+            runCurrent()
+            assertEquals(SubmitState.Submitting, awaitItem().submitState)
+
+            advanceUntilIdle()
+            val failed = awaitItem()
+            assertEquals(SubmitState.Failed(AppError.Storage()), failed.submitState)
+            assertEquals("5", failed.amountInput)
+            assertTrue(!failed.saved)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `repository failure becomes a typed submit failure and keeps input`() = runTest(dispatcher) {
         repository.createResult = Outcome.Failure(AppError.Storage())
         val viewModel = viewModel()
@@ -210,6 +260,7 @@ class AddTransactionViewModelTest {
 
         var createdDraft: TransactionDraft? = null
         var createResult: Outcome<Transaction> = Outcome.Success(saved)
+        var createGate: CompletableDeferred<Unit>? = null
 
         override fun observeTransactions(
             fromInclusive: Long,
@@ -222,6 +273,7 @@ class AddTransactionViewModelTest {
 
         override suspend fun create(draft: TransactionDraft): Outcome<Transaction> {
             createdDraft = draft
+            createGate?.await()
             return createResult
         }
 
