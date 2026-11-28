@@ -21,6 +21,7 @@ import com.aram.core.domain.repository.LedgerLookup
 import com.aram.core.domain.repository.OutboxTrigger
 import com.aram.core.domain.repository.TransactionRepository
 import com.aram.core.domain.transaction.TransactionDraft
+import com.aram.core.domain.transaction.TransactionFilter
 import com.aram.core.logging.Logger
 import com.aram.core.model.Account
 import com.aram.core.model.AppError
@@ -64,6 +65,19 @@ class TransactionRepositoryImpl @Inject constructor(
     @OptIn(ExperimentalCoroutinesApi::class)
     override fun observeRecent(limit: Int): Flow<List<Transaction>> = observeLedger { userId ->
         transactionDao.observeRecent(userId, limit)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun search(filter: TransactionFilter): Flow<List<Transaction>> = observeLedger { userId ->
+        transactionDao.search(
+            userId = userId,
+            noteQuery = filter.query.trim(),
+            type = filter.type?.name,
+            excludeType = filter.excludeType?.name,
+            categoryId = filter.categoryId,
+            fromInclusive = filter.fromInclusive,
+            toExclusive = filter.toExclusive,
+        )
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -208,6 +222,46 @@ class TransactionRepositoryImpl @Inject constructor(
                         entity = existing.copy(deletedAt = now, updatedAt = now),
                         op = SyncOutboxEntity.OP_DELETE,
                         categorySlug = null,
+                        now = now,
+                    ),
+                )
+                if (changed == 0) {
+                    throw RowNotFound()
+                }
+                outboxTrigger.schedule()
+            }
+        }
+    }
+
+    override suspend fun restore(id: String): Outcome<Unit> {
+        val userId = when (val result = currentUserId()) {
+            is Outcome.Success -> result.value
+            is Outcome.Failure -> return result
+        }
+        return safeOutcome(
+            component = COMPONENT,
+            operation = "restore",
+            logger = logger,
+            mapError = { it.toStorageAwareError() },
+        ) {
+            withContext(dispatchers.io) {
+                val now = System.currentTimeMillis()
+                val existing = transactionDao.findByIdIncludingDeleted(userId, id)
+                    ?: throw RowNotFound()
+                if (existing.deletedAt == null) return@withContext
+                val restored = existing.copy(deletedAt = null, updatedAt = now, pendingPush = true)
+                val changed = writeDao.restoreWithOutbox(
+                    userId = userId,
+                    id = id,
+                    updatedAt = now,
+                    entry = outboxEntry(
+                        userId = userId,
+                        entity = restored,
+                        op = SyncOutboxEntity.OP_UPDATE,
+                        categorySlug = categorySlug(
+                            existing.categoryId,
+                            existing.categoryId?.let { categoryDao.findById(userId, it) },
+                        ),
                         now = now,
                     ),
                 )

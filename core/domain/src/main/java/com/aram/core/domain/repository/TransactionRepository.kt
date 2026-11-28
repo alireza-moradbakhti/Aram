@@ -3,6 +3,7 @@ package com.aram.core.domain.repository
 import com.aram.core.model.Outcome
 import com.aram.core.model.Transaction
 import com.aram.core.domain.transaction.TransactionDraft
+import com.aram.core.domain.transaction.TransactionFilter
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -18,6 +19,9 @@ interface TransactionRepository {
 
     fun observeRecent(limit: Int): Flow<List<Transaction>>
 
+    /** Cross-month ledger search; criteria compose with AND. */
+    fun search(filter: TransactionFilter): Flow<List<Transaction>>
+
     fun observeTransaction(id: String): Flow<Transaction?>
 
     suspend fun create(draft: TransactionDraft): Outcome<Transaction>
@@ -26,4 +30,7 @@ interface TransactionRepository {
 
     /** Marks the row as deleted; it stays as a tombstone for sync. */
     suspend fun softDelete(id: String): Outcome<Unit>
+
+    /** Reverses [softDelete]: clears the tombstone and queues the row again. */
+    suspend fun restore(id: String): Outcome<Unit>
 }
