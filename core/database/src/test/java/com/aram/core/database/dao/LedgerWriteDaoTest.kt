@@ -119,6 +119,68 @@ class LedgerWriteDaoTest {
     }
 
     @Test
+    fun `transfer legs are written together without an outbox entry`() = runBlocking {
+        ledger.createTransfer(listOf(leg("out", -50_000L), leg("in", 50_000L)))
+
+        val dao = db.transactionDao()
+        assertEquals(-50_000L, dao.findById(USER, "out")?.amountMinor)
+        assertEquals(50_000L, dao.findById(USER, "in")?.amountMinor)
+        assertEquals("TRANSFER", dao.findById(USER, "in")?.type)
+        assertEquals(0, outbox.count(USER))
+    }
+
+    @Test
+    fun `a failing leg rolls the whole transfer back`() = runBlocking {
+        db.openHelper.writableDatabase.execSQL(
+            "CREATE TRIGGER reject_in BEFORE INSERT ON transactions " +
+                "WHEN NEW.id = 'in' BEGIN SELECT RAISE(ABORT, 'rejected'); END",
+        )
+
+        var failure: Throwable? = null
+        try {
+            ledger.createTransfer(listOf(leg("out", -50_000L), leg("in", 50_000L)))
+        } catch (e: Throwable) {
+            failure = e
+        }
+
+        assertNotNull(failure)
+        assertNull(db.transactionDao().findById(USER, "out"))
+        assertNull(db.transactionDao().findById(USER, "in"))
+        assertEquals(0, outbox.count(USER))
+    }
+
+    @Test
+    fun `deleting a transfer group tombstones every leg without queuing`() = runBlocking {
+        ledger.createTransfer(listOf(leg("out", -50_000L), leg("in", 50_000L)))
+
+        val changed = ledger.deleteTransferGroup(USER, GROUP, deletedAt = 10L)
+
+        assertEquals(2, changed)
+        assertNull(db.transactionDao().findById(USER, "out"))
+        assertNull(db.transactionDao().findById(USER, "in"))
+        assertEquals(0, outbox.count(USER))
+    }
+
+    @Test
+    fun `the month sweep spares transfer legs`() = runBlocking {
+        db.transactionDao().upsert(transaction("t1"))
+        ledger.createTransfer(listOf(leg("out", -50_000L), leg("in", 50_000L)))
+
+        val swept = db.transactionDao().softDeleteMissing(
+            userId = USER,
+            fromInclusive = 0L,
+            toExclusive = 10_000L,
+            keepIds = emptyList(),
+            deletedAt = 10L,
+        )
+
+        assertEquals(1, swept)
+        assertNull(db.transactionDao().findById(USER, "t1"))
+        assertNotNull(db.transactionDao().findById(USER, "out"))
+        assertNotNull(db.transactionDao().findById(USER, "in"))
+    }
+
+    @Test
     fun `restoring clears the tombstone and enqueues the update`() = runBlocking {
         db.transactionDao().upsert(transaction("t1"))
         ledger.deleteWithOutbox(USER, "t1", 10L, entry("e1", "t1", SyncOutboxEntity.OP_DELETE))
@@ -178,7 +240,26 @@ class LedgerWriteDaoTest {
         deletedAt = null,
     )
 
+    private fun leg(id: String, amountMinor: Long) = TransactionEntity(
+        id = id,
+        userId = USER,
+        type = "TRANSFER",
+        accountId = if (amountMinor < 0) "a1" else "a2",
+        categoryId = null,
+        amountMinor = amountMinor,
+        currencyCode = "IRR",
+        occurredAt = 0L,
+        note = null,
+        transferGroupId = GROUP,
+        recurringRuleId = null,
+        createdAt = 0L,
+        updatedAt = 0L,
+        deletedAt = null,
+        pendingPush = false,
+    )
+
     private companion object {
         const val USER = "user-1"
+        const val GROUP = "group-1"
     }
 }

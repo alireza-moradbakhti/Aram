@@ -22,12 +22,14 @@ import com.aram.core.domain.repository.OutboxTrigger
 import com.aram.core.domain.repository.TransactionRepository
 import com.aram.core.domain.transaction.TransactionDraft
 import com.aram.core.domain.transaction.TransactionFilter
+import com.aram.core.domain.transaction.TransferDraft
 import com.aram.core.logging.Logger
 import com.aram.core.model.Account
 import com.aram.core.model.AppError
 import com.aram.core.model.Category
 import com.aram.core.model.Outcome
 import com.aram.core.model.Transaction
+import com.aram.core.model.TransactionType
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -143,6 +145,74 @@ class TransactionRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun createTransfer(draft: TransferDraft): Outcome<String> {
+        val userId = when (val result = currentUserId()) {
+            is Outcome.Success -> result.value
+            is Outcome.Failure -> return result
+        }
+        return safeOutcome(
+            component = COMPONENT,
+            operation = "createTransfer",
+            logger = logger,
+            mapError = { it.toStorageAwareError() },
+        ) {
+            withContext(dispatchers.io) {
+                val now = System.currentTimeMillis()
+                val groupId = UUID.randomUUID().toString()
+                val note = draft.note.cleanedNote()
+                writeDao.createTransfer(
+                    listOf(
+                        transferLeg(
+                            userId = userId,
+                            groupId = groupId,
+                            accountId = draft.fromAccountId,
+                            amountMinor = -draft.amountMinor,
+                            draft = draft,
+                            note = note,
+                            now = now,
+                        ),
+                        transferLeg(
+                            userId = userId,
+                            groupId = groupId,
+                            accountId = draft.toAccountId,
+                            amountMinor = draft.amountMinor,
+                            draft = draft,
+                            note = note,
+                            now = now,
+                        ),
+                    ),
+                )
+                groupId
+            }
+        }
+    }
+
+    private fun transferLeg(
+        userId: String,
+        groupId: String,
+        accountId: String,
+        amountMinor: Long,
+        draft: TransferDraft,
+        note: String?,
+        now: Long,
+    ) = TransactionEntity(
+        id = UUID.randomUUID().toString(),
+        userId = userId,
+        type = TransactionType.TRANSFER.name,
+        accountId = accountId,
+        categoryId = null,
+        amountMinor = amountMinor,
+        currencyCode = draft.currencyCode,
+        occurredAt = draft.occurredAt,
+        note = note,
+        transferGroupId = groupId,
+        recurringRuleId = null,
+        createdAt = now,
+        updatedAt = now,
+        deletedAt = null,
+        pendingPush = false,
+    )
+
     override suspend fun update(id: String, draft: TransactionDraft): Outcome<Transaction> {
         val userId = when (val result = currentUserId()) {
             is Outcome.Success -> result.value
@@ -213,6 +283,11 @@ class TransactionRepositoryImpl @Inject constructor(
             withContext(dispatchers.io) {
                 val now = System.currentTimeMillis()
                 val existing = transactionDao.findById(userId, id) ?: throw RowNotFound()
+                val groupId = existing.transferGroupId
+                if (groupId != null) {
+                    writeDao.deleteTransferGroup(userId = userId, transferGroupId = groupId, deletedAt = now)
+                    return@withContext
+                }
                 val changed = writeDao.deleteWithOutbox(
                     userId = userId,
                     id = id,

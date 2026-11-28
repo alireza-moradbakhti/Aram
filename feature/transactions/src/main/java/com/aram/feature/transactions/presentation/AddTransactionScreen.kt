@@ -118,6 +118,7 @@ fun AddTransactionRoute(
             onTypeChange = viewModel::onTypeChange,
             onAmountChange = viewModel::onAmountChange,
             onAccountSelect = viewModel::onAccountSelected,
+            onTransferAccountSelect = viewModel::onTransferAccountSelected,
             onCategorySelect = viewModel::onCategorySelected,
             onDateSelect = viewModel::onDateSelected,
             onNoteChange = viewModel::onNoteChange,
@@ -134,6 +135,7 @@ fun AddTransactionScreen(
     onTypeChange: (TransactionType) -> Unit,
     onAmountChange: (String) -> Unit,
     onAccountSelect: (String) -> Unit,
+    onTransferAccountSelect: (String) -> Unit,
     onCategorySelect: (String) -> Unit,
     onDateSelect: (LocalDate) -> Unit,
     onNoteChange: (String) -> Unit,
@@ -144,11 +146,14 @@ fun AddTransactionScreen(
 ) {
     val colors = MaterialTheme.aramColors
     var accountPickerOpen by rememberSaveable { mutableStateOf(false) }
+    var transferPickerOpen by rememberSaveable { mutableStateOf(false) }
     var datePickerOpen by rememberSaveable { mutableStateOf(false) }
     var deleteDialogOpen by rememberSaveable { mutableStateOf(false) }
+    val isTransfer = state.isTransfer
     val isExpense = state.type == TransactionType.EXPENSE
     val isEditing = state.isEditing
     val heading = when {
+        isTransfer -> "Transfer money"
         isEditing && isExpense -> "Edit expense"
         isEditing -> "Edit income"
         isExpense -> "Add expense"
@@ -182,10 +187,20 @@ fun AddTransactionScreen(
         Spacer(Modifier.height(12.dp))
 
         AramSegmented(
-            options = listOf("Expense", "Income"),
-            selectedIndex = if (isExpense) 0 else 1,
+            options = listOf("Expense", "Income", "Transfer"),
+            selectedIndex = when (state.type) {
+                TransactionType.EXPENSE -> 0
+                TransactionType.INCOME -> 1
+                TransactionType.TRANSFER -> 2
+            },
             onSelect = { index ->
-                onTypeChange(if (index == 0) TransactionType.EXPENSE else TransactionType.INCOME)
+                onTypeChange(
+                    when (index) {
+                        0 -> TransactionType.EXPENSE
+                        1 -> TransactionType.INCOME
+                        else -> TransactionType.TRANSFER
+                    },
+                )
             },
         )
 
@@ -203,39 +218,41 @@ fun AddTransactionScreen(
 
         Spacer(Modifier.height(14.dp))
 
-        if (state.visibleCategories.isEmpty()) {
-            Text(
-                text = if (state.optionsLoaded) {
-                    "No ${if (isExpense) "expense" else "income"} categories yet."
-                } else {
-                    "Loading categories…"
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.textFaint,
-            )
-        } else {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                state.visibleCategories.forEach { category ->
-                    CategoryChip(
-                        label = category.name,
-                        icon = categoryIcon(category.iconKey),
-                        selected = category.id == state.selectedCategoryId,
-                        onClick = { onCategorySelect(category.id) },
-                    )
+        if (!isTransfer) {
+            if (state.visibleCategories.isEmpty()) {
+                Text(
+                    text = if (state.optionsLoaded) {
+                        "No ${if (state.type == TransactionType.EXPENSE) "expense" else "income"} categories yet."
+                    } else {
+                        "Loading categories…"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.textFaint,
+                )
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    state.visibleCategories.forEach { category ->
+                        CategoryChip(
+                            label = category.name,
+                            icon = categoryIcon(category.iconKey),
+                            selected = category.id == state.selectedCategoryId,
+                            onClick = { onCategorySelect(category.id) },
+                        )
+                    }
                 }
             }
-        }
 
-        Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(14.dp))
+        }
 
         MetaRow(
             icon = AramIcons.wallet,
-            label = "Account",
+            label = if (isTransfer) "From" else "Account",
             value = state.selectedAccount?.let { "${it.name} · ${it.currencyCode}" } ?: "None",
             trailing = if (accountPickerOpen) AramIcons.chevronUp else AramIcons.chevronDown,
             onClick = { accountPickerOpen = !accountPickerOpen },
@@ -251,6 +268,40 @@ fun AddTransactionScreen(
             )
         }
 
+        if (isTransfer) {
+            Spacer(Modifier.height(8.dp))
+            MetaRow(
+                icon = AramIcons.wallet,
+                label = "To account",
+                value = state.transferToAccount
+                    ?.let { "${it.name} · ${it.currencyCode}" }
+                    ?: "Choose account",
+                trailing = if (transferPickerOpen) AramIcons.chevronUp else AramIcons.chevronDown,
+                onClick = { transferPickerOpen = !transferPickerOpen },
+            )
+            AnimatedVisibility(visible = transferPickerOpen) {
+                AccountPicker(
+                    accounts = state.accounts.filter { it.id != state.selectedAccountId },
+                    selectedId = state.transferToAccountId,
+                    onSelect = {
+                        transferPickerOpen = false
+                        onTransferAccountSelect(it)
+                    },
+                )
+            }
+            val source = state.selectedAccount
+            val destination = state.transferToAccount
+            if (source != null && destination != null && !state.transferCurrenciesMatch) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "Both accounts must use the same currency " +
+                        "(${source.currencyCode} → ${destination.currencyCode}).",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                    color = colors.danger,
+                )
+            }
+        }
+
         Spacer(Modifier.height(8.dp))
 
         MetaRow(
@@ -263,6 +314,9 @@ fun AddTransactionScreen(
 
         val fieldMessage = when {
             TransactionField.ACCOUNT in state.invalidFields -> "Choose an account to save."
+            TransactionField.TO_ACCOUNT in state.invalidFields -> "Choose a different destination account."
+            TransactionField.CURRENCY in state.invalidFields ->
+                "Both accounts must use the same currency."
             TransactionField.CATEGORY in state.invalidFields -> "Choose a category to save."
             else -> null
         }
@@ -288,6 +342,7 @@ fun AddTransactionScreen(
             Text(
                 text = when {
                     state.deleteFailed -> "Couldn't delete this transaction. Try again."
+                    isTransfer -> "Couldn't save this transfer. Try again."
                     isEditing -> "Couldn't save your changes. Try again."
                     else -> "Couldn't save this ${if (isExpense) "expense" else "income"}. Try again."
                 },
@@ -299,7 +354,12 @@ fun AddTransactionScreen(
         Spacer(Modifier.height(16.dp))
 
         AramPrimaryButton(
-            text = if (isEditing) "Save changes" else if (isExpense) "Save expense" else "Save income",
+            text = when {
+                isTransfer -> "Transfer"
+                isEditing -> "Save changes"
+                isExpense -> "Save expense"
+                else -> "Save income"
+            },
             onClick = onSave,
             enabled = state.canSave,
             loading = state.submitState is SubmitState.Submitting,
@@ -745,6 +805,7 @@ private fun AddTransactionScreenDarkPreview() {
             onTypeChange = {},
             onAmountChange = {},
             onAccountSelect = {},
+            onTransferAccountSelect = {},
             onCategorySelect = {},
             onDateSelect = {},
             onNoteChange = {},
@@ -765,6 +826,41 @@ private fun AddTransactionScreenLightPreview() {
             onTypeChange = {},
             onAmountChange = {},
             onAccountSelect = {},
+            onTransferAccountSelect = {},
+            onCategorySelect = {},
+            onDateSelect = {},
+            onNoteChange = {},
+            onSave = {},
+            onDelete = {},
+            onClose = {},
+            modifier = Modifier.background(MaterialTheme.colorScheme.surface),
+        )
+    }
+}
+
+@Preview(showBackground = true, widthDp = 360)
+@Composable
+private fun TransferScreenPreview() {
+    AramTheme(darkTheme = false) {
+        AddTransactionScreen(
+            state = previewState(amountInput = "125000").copy(
+                type = TransactionType.TRANSFER,
+                transferToAccountId = "card",
+                accounts = previewState().accounts + Account(
+                    id = "card",
+                    name = "Card",
+                    type = AccountType.BANK,
+                    currencyCode = "USD",
+                    openingBalanceMinor = 0L,
+                    colorArgb = 0xFF3B82F6.toInt(),
+                    iconKey = "card",
+                    archived = false,
+                ),
+            ),
+            onTypeChange = {},
+            onAmountChange = {},
+            onAccountSelect = {},
+            onTransferAccountSelect = {},
             onCategorySelect = {},
             onDateSelect = {},
             onNoteChange = {},

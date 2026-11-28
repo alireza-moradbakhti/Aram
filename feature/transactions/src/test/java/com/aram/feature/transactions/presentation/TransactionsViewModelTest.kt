@@ -8,6 +8,7 @@ import com.aram.core.domain.repository.OutboxSync
 import com.aram.core.domain.repository.TransactionRepository
 import com.aram.core.domain.transaction.TransactionDraft
 import com.aram.core.domain.transaction.TransactionFilter
+import com.aram.core.domain.transaction.TransferDraft
 import com.aram.core.model.Account
 import com.aram.core.model.AccountType
 import com.aram.core.model.AppError
@@ -51,7 +52,7 @@ class TransactionsViewModelTest {
     private val ledgerSync = FakeLedgerSync(events)
     private val outbox = FakeOutboxSync(events)
     private val directory = FakeDirectory(
-        accounts = MutableStateFlow(listOf(cash)),
+        accounts = MutableStateFlow(listOf(cash, card)),
         categories = MutableStateFlow(listOf(food, transport, salary)),
     )
 
@@ -308,6 +309,50 @@ class TransactionsViewModelTest {
     }
 
     @Test
+    fun `a transfer pair renders as one outflow row and stays out of the summaries`() = runTest(dispatcher) {
+        repository.rows.value = listOf(
+            expense("a", 18_000, "food", "2026-10-12T09:12:00Z"),
+            transfer("out", -50_000, cash.id, "2026-10-12T10:00:00Z", "g1", note = "Rent"),
+            transfer("in", 50_000, card.id, "2026-10-12T10:00:00Z", "g1", note = "Rent"),
+            income("c", 8_500_000, "salary", "2026-10-12T08:00:00Z"),
+        )
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(18_000, state.spentMinor)
+        assertEquals(8_500_000, state.incomeMinor)
+        assertEquals(3, state.entryCount)
+        assertEquals(1, state.incomeCount)
+
+        val group = state.groups.single()
+        assertEquals(listOf("out", "a", "c"), group.transactions.map { it.id })
+        assertEquals(-68_000, group.totalMinor)
+
+        val row = group.transactions.first { it.id == "out" }
+        assertEquals("Rent", row.title)
+        assertEquals("Transfer · 10:00 · Card", row.detail)
+        assertEquals(-50_000, row.amountMinor)
+    }
+
+    @Test
+    fun `a transfer only month reports no spending or income`() = runTest(dispatcher) {
+        repository.rows.value = listOf(
+            transfer("out", -50_000, cash.id, "2026-10-12T10:00:00Z", "g1", note = null),
+            transfer("in", 50_000, card.id, "2026-10-12T10:00:00Z", "g1", note = null),
+        )
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(0, state.spentMinor)
+        assertEquals(0, state.incomeMinor)
+        assertEquals(1, state.entryCount)
+        assertTrue(state.groups.single().transactions.single().pendingSync.not())
+        assertEquals(-50_000, state.groups.single().totalMinor)
+    }
+
+    @Test
     fun `typing debounces the search until the pause`() = runTest(dispatcher) {
         val viewModel = viewModel()
         advanceUntilIdle()
@@ -465,6 +510,26 @@ class TransactionsViewModelTest {
         currency: String = "USD",
     ) = transaction(id, TransactionType.INCOME, amount, categoryId, at, note, currency)
 
+    private fun transfer(
+        id: String,
+        amount: Long,
+        accountId: String,
+        at: String,
+        groupId: String,
+        note: String?,
+    ) = Transaction(
+        id = id,
+        accountId = accountId,
+        categoryId = null,
+        type = TransactionType.TRANSFER,
+        amountMinor = amount,
+        currencyCode = "USD",
+        occurredAt = Instant.parse(at).toEpochMilli(),
+        note = note,
+        transferGroupId = groupId,
+        recurringRuleId = null,
+    )
+
     private fun transaction(
         id: String,
         type: TransactionType,
@@ -530,6 +595,9 @@ class TransactionsViewModelTest {
         override suspend fun create(draft: TransactionDraft): Outcome<Transaction> =
             Outcome.Failure(AppError.Storage())
 
+        override suspend fun createTransfer(draft: TransferDraft): Outcome<String> =
+            Outcome.Failure(AppError.Storage())
+
         override suspend fun update(id: String, draft: TransactionDraft): Outcome<Transaction> =
             Outcome.Failure(AppError.Storage())
 
@@ -577,6 +645,16 @@ class TransactionsViewModelTest {
             id = "cash",
             name = "Cash",
             type = AccountType.CASH,
+            currencyCode = "USD",
+            openingBalanceMinor = 0L,
+            colorArgb = 0,
+            iconKey = "wallet",
+            archived = false,
+        )
+        val card = Account(
+            id = "card",
+            name = "Card",
+            type = AccountType.BANK,
             currencyCode = "USD",
             openingBalanceMinor = 0L,
             colorArgb = 0,

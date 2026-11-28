@@ -9,7 +9,9 @@ import com.aram.core.domain.repository.TransactionRepository
 import com.aram.core.domain.transaction.TransactionDraft
 import com.aram.core.domain.transaction.TransactionField
 import com.aram.core.domain.transaction.TransactionFilter
+import com.aram.core.domain.transaction.TransferDraft
 import com.aram.core.domain.usecase.CreateTransaction
+import com.aram.core.domain.usecase.CreateTransfer
 import com.aram.core.domain.usecase.DeleteTransaction
 import com.aram.core.domain.usecase.UpdateTransaction
 import com.aram.core.model.Account
@@ -62,6 +64,7 @@ class AddTransactionViewModelTest {
 
     private fun viewModel(editingId: String? = null) = AddTransactionViewModel(
         createTransaction = CreateTransaction(repository, FakeLedgerLookup()),
+        createTransfer = CreateTransfer(repository, FakeLedgerLookup()),
         updateTransaction = UpdateTransaction(repository, FakeLedgerLookup()),
         deleteTransaction = DeleteTransaction(repository),
         repository = repository,
@@ -253,6 +256,22 @@ class AddTransactionViewModelTest {
     }
 
     @Test
+    fun `switching to transfer preselects a same-currency destination`() = runTest(dispatcher) {
+        accounts.value = listOf(cash, card)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onTypeChange(TransactionType.TRANSFER)
+
+        val state = viewModel.uiState.value
+        assertEquals(TransactionType.TRANSFER, state.type)
+        assertEquals(cash.id, state.selectedAccountId)
+        assertEquals(card.id, state.transferToAccountId)
+        assertTrue(state.visibleCategories.isEmpty())
+        assertTrue(state.canSave)
+    }
+
+    @Test
     fun `edit mode prefills every field from the stored transaction`() = runTest(dispatcher) {
         val stored = saved.copy(amountMinor = 1_234L, note = "Lunch", occurredAt = 1_700_000_000_000L)
         val viewModel = editingViewModel(stored)
@@ -271,6 +290,26 @@ class AddTransactionViewModelTest {
     }
 
     @Test
+    fun `transfer saves a draft with both accounts`() = runTest(dispatcher) {
+        accounts.value = listOf(cash, card)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onTypeChange(TransactionType.TRANSFER)
+        viewModel.onAmountChange("1250")
+        viewModel.onNoteChange(" Move to card ")
+        viewModel.onSave()
+        advanceUntilIdle()
+
+        val draft = repository.transferDraft
+        assertEquals(cash.id, draft?.fromAccountId)
+        assertEquals(card.id, draft?.toAccountId)
+        assertEquals(125_000L, draft?.amountMinor)
+        assertEquals("Move to card", draft?.note?.trim())
+        assertTrue(viewModel.uiState.value.saved)
+    }
+
+    @Test
     fun `edit save updates the same row instead of creating`() = runTest(dispatcher) {
         val viewModel = editingViewModel(saved)
         advanceUntilIdle()
@@ -283,6 +322,59 @@ class AddTransactionViewModelTest {
         assertEquals(saved.id, repository.updatedId)
         assertEquals(2_000L, repository.updatedDraft?.amountMinor)
         assertTrue(viewModel.uiState.value.saved)
+    }
+
+    @Test
+    fun `transfer between different currencies blocks saving`() = runTest(dispatcher) {
+        accounts.value = listOf(cash, card.copy(currencyCode = "IRR"))
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onTypeChange(TransactionType.TRANSFER)
+        viewModel.onTransferAccountSelected(card.id)
+        viewModel.onAmountChange("1250")
+
+        val state = viewModel.uiState.value
+        assertEquals(card.id, state.transferToAccountId)
+        assertTrue(!state.transferCurrenciesMatch)
+        assertTrue(!state.canSave)
+    }
+
+    @Test
+    fun `transfer with mismatched currencies reports a currency problem`() = runTest(dispatcher) {
+        accounts.value = listOf(cash, card.copy(currencyCode = "IRR"))
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onTypeChange(TransactionType.TRANSFER)
+        viewModel.onTransferAccountSelected(card.id)
+        viewModel.onAmountChange("1250")
+        viewModel.onSave()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertTrue(TransactionField.CURRENCY in state.invalidFields)
+        assertNull(repository.transferDraft)
+        assertTrue(!state.saved)
+    }
+
+    @Test
+    fun `transfer to the source account is rejected`() = runTest(dispatcher) {
+        accounts.value = listOf(cash, card)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onTypeChange(TransactionType.TRANSFER)
+        viewModel.onTransferAccountSelected(cash.id)
+        viewModel.onAmountChange("1250")
+
+        assertTrue(!viewModel.uiState.value.canSave)
+        viewModel.onSave()
+        advanceUntilIdle()
+
+        assertTrue(TransactionField.TO_ACCOUNT in viewModel.uiState.value.invalidFields)
+        assertNull(repository.transferDraft)
+        assertTrue(!viewModel.uiState.value.saved)
     }
 
     @Test
@@ -337,6 +429,8 @@ class AddTransactionViewModelTest {
 
         var createdDraft: TransactionDraft? = null
         var createResult: Outcome<Transaction> = Outcome.Success(saved)
+        var transferDraft: TransferDraft? = null
+        var transferResult: Outcome<String> = Outcome.Success("group-1")
         var createGate: CompletableDeferred<Unit>? = null
         val stored = MutableStateFlow<Transaction?>(null)
         var updatedId: String? = null
@@ -363,6 +457,11 @@ class AddTransactionViewModelTest {
             return createResult
         }
 
+override suspend fun createTransfer(draft: TransferDraft): Outcome<String> {
+            transferDraft = draft
+            return transferResult
+        }
+
         override suspend fun update(id: String, draft: TransactionDraft): Outcome<Transaction> {
             updatedId = id
             updatedDraft = draft
@@ -386,6 +485,16 @@ class AddTransactionViewModelTest {
             openingBalanceMinor = 0L,
             colorArgb = 0,
             iconKey = "wallet",
+            archived = false,
+        )
+        val card = Account(
+            id = "card",
+            name = "Card",
+            type = AccountType.BANK,
+            currencyCode = "USD",
+            openingBalanceMinor = 0L,
+            colorArgb = 0,
+            iconKey = "card",
             archived = false,
         )
         val food = Category(

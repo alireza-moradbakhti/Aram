@@ -17,6 +17,7 @@ import com.aram.core.database.entity.TransactionEntity
 import com.aram.core.datastore.SessionStore
 import com.aram.core.domain.transaction.TransactionDraft
 import com.aram.core.domain.transaction.TransactionFilter
+import com.aram.core.domain.transaction.TransferDraft
 import com.aram.core.logging.Logger
 import com.aram.core.model.AccountType
 import com.aram.core.model.AppError
@@ -99,6 +100,45 @@ class TransactionRepositoryImplTest {
     fun `failed writes do not queue anything`() = runTest {
         repository.update("missing", draft())
 
+        assertTrue(outbox.rows.isEmpty())
+        assertEquals(0, trigger.scheduled)
+    }
+
+    @Test
+    fun `createTransfer writes a signed pair in one group and never queues a push`() = runTest {
+        val result = repository.createTransfer(transferDraft())
+
+        val groupId = (result as Outcome.Success).value
+        val legs = transactionDao.rows.values.filter { it.transferGroupId == groupId }
+        assertEquals(2, legs.size)
+        assertEquals(setOf(-125_000L, 125_000L), legs.map { it.amountMinor }.toSet())
+        assertEquals(setOf("acc", "card"), legs.map { it.accountId }.toSet())
+        assertTrue(legs.all { it.type == TransactionType.TRANSFER.name && it.categoryId == null })
+        assertTrue(legs.none { it.pendingPush })
+        assertTrue(outbox.rows.isEmpty())
+        assertEquals(0, trigger.scheduled)
+    }
+
+    @Test
+    fun `createTransfer without a session is unauthorized`() = runTest {
+        session.userId.value = null
+
+        val result = repository.createTransfer(transferDraft())
+
+        assertEquals(AppError.Unauthorized, (result as Outcome.Failure).error)
+        assertTrue(transactionDao.rows.isEmpty())
+    }
+
+    @Test
+    fun `deleting a transfer leg tombstones the whole group without queueing`() = runTest {
+        val groupId = (repository.createTransfer(transferDraft()) as Outcome.Success).value
+        val leg = transactionDao.rows.values.first { it.transferGroupId == groupId }
+
+        val result = repository.softDelete(leg.id)
+
+        assertTrue(result is Outcome.Success)
+        val legs = transactionDao.rows.values.filter { it.transferGroupId == groupId }
+        assertTrue(legs.all { it.deletedAt != null })
         assertTrue(outbox.rows.isEmpty())
         assertEquals(0, trigger.scheduled)
     }
@@ -313,6 +353,15 @@ class TransactionRepositoryImplTest {
         currencyCode = "IRR",
         occurredAt = 1_700_000_000_000L,
         note = note,
+    )
+
+    private fun transferDraft() = TransferDraft(
+        fromAccountId = "acc",
+        toAccountId = "card",
+        amountMinor = 125_000L,
+        currencyCode = "IRR",
+        occurredAt = 1_700_000_000_000L,
+        note = " Move to card ",
     )
 
     private fun row(
