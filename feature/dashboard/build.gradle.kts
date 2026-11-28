@@ -33,6 +33,7 @@ android {
 
 dependencies {
     implementation(project(":core:designsystem"))
+    implementation(project(":core:domain"))
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.bundles.lifecycle)
     implementation(libs.androidx.hilt.navigation.compose)
