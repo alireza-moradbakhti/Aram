@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
@@ -60,6 +61,7 @@ import com.aram.core.designsystem.component.AramBarTone
 import com.aram.core.designsystem.component.AramChip
 import com.aram.core.designsystem.component.AramChipTone
 import com.aram.core.designsystem.component.AramIconButton
+import com.aram.core.designsystem.component.AramPrimaryButton
 import com.aram.core.designsystem.component.AramRing
 import com.aram.core.designsystem.component.AramSectionHeader
 import com.aram.core.designsystem.component.GlassCard
@@ -70,14 +72,17 @@ import com.aram.core.designsystem.icon.AramIcons
 fun DashboardRoute(
     displayName: String,
     modifier: Modifier = Modifier,
-    onSeeAll: () -> Unit = {},
+    onOpenLedger: () -> Unit = {},
+    onAddTransaction: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     DashboardScreen(
         displayName = displayName,
         isLoading = state.isLoading,
-        onSeeAll = onSeeAll,
+        recent = state.recent,
+        onOpenLedger = onOpenLedger,
+        onAddTransaction = onAddTransaction,
         modifier = modifier,
     )
 }
@@ -87,7 +92,9 @@ fun DashboardScreen(
     displayName: String,
     modifier: Modifier = Modifier,
     isLoading: Boolean = false,
-    onSeeAll: () -> Unit = {},
+    recent: List<RecentTransactionUi> = emptyList(),
+    onOpenLedger: () -> Unit = {},
+    onAddTransaction: () -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -104,7 +111,12 @@ fun DashboardScreen(
             if (loading) {
                 DashboardSkeleton(modifier = Modifier.testTag(SKELETON_TAG))
             } else {
-                DashboardContent(displayName = displayName, onSeeAll = onSeeAll)
+                DashboardContent(
+                    displayName = displayName,
+                    recent = recent,
+                    onOpenLedger = onOpenLedger,
+                    onAddTransaction = onAddTransaction,
+                )
             }
         }
     }
@@ -113,7 +125,9 @@ fun DashboardScreen(
 @Composable
 private fun DashboardContent(
     displayName: String,
-    onSeeAll: () -> Unit,
+    recent: List<RecentTransactionUi>,
+    onOpenLedger: () -> Unit,
+    onAddTransaction: () -> Unit,
 ) {
     val colors = MaterialTheme.aramColors
     Column(Modifier.fillMaxWidth()) {
@@ -176,7 +190,7 @@ private fun DashboardContent(
         AramSectionHeader(
             title = "Budgets",
             action = "See all",
-            onAction = onSeeAll,
+            onAction = onOpenLedger,
             modifier = Modifier.padding(top = 8.dp),
         )
 
@@ -210,32 +224,23 @@ private fun DashboardContent(
             }
         }
 
-        AramSectionHeader(title = "Recent", action = "See all", onAction = onSeeAll)
+        AramSectionHeader(title = "Recent", action = "See all", onAction = onOpenLedger)
 
         GlassCard(
             shape = RoundedCornerShape(22.dp),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         ) {
-            RecentRow(
-                icon = AramIcons.cafe,
-                title = "Café Nima",
-                meta = "Food · 09:12",
-                amount = -180_000,
-            )
-            RecentRow(
-                icon = AramIcons.car,
-                title = "Metro top-up",
-                meta = "Transport · 08:04",
-                amount = -500_000,
-            )
-            RecentRow(
-                icon = AramIcons.trending,
-                title = "Salary",
-                meta = "Income · Oct 30",
-                amount = 85_000_000,
-                incoming = true,
-                showDivider = false,
-            )
+            if (recent.isEmpty()) {
+                EmptyRecent(onAddTransaction = onAddTransaction)
+            } else {
+                recent.forEachIndexed { index, row ->
+                    RecentRow(
+                        row = row,
+                        onClick = onOpenLedger,
+                        showDivider = index != recent.lastIndex,
+                    )
+                }
+            }
         }
 
         Spacer(Modifier.height(12.dp))
@@ -614,11 +619,8 @@ private fun BudgetLine(label: String, value: String) {
 
 @Composable
 private fun RecentRow(
-    icon: ImageVector,
-    title: String,
-    meta: String,
-    amount: Long,
-    incoming: Boolean = false,
+    row: RecentTransactionUi,
+    onClick: () -> Unit,
     showDivider: Boolean = true,
 ) {
     val colors = MaterialTheme.aramColors
@@ -626,6 +628,7 @@ private fun RecentRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .clickable(onClick = onClick)
                 .padding(vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -638,7 +641,7 @@ private fun RecentRow(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = icon,
+                    imageVector = categoryIcon(row.categoryIconKey),
                     contentDescription = null,
                     tint = colors.textDim,
                     modifier = Modifier.size(18.dp),
@@ -647,23 +650,84 @@ private fun RecentRow(
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = title,
+                    text = row.title,
                     style = MaterialTheme.typography.titleSmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = meta,
+                    text = row.meta,
                     style = MaterialTheme.typography.labelSmall,
                     color = colors.textFaint,
                 )
             }
-            MoneyLabel(amount = amount, incoming = incoming)
+            MoneyLabel(
+                amount = row.amountMinor,
+                incoming = row.incoming,
+                fractionDigits = row.fractionDigits,
+            )
         }
         if (showDivider) {
             HorizontalDivider(color = colors.border, thickness = 1.dp)
         }
     }
+}
+
+@Composable
+private fun EmptyRecent(onAddTransaction: () -> Unit) {
+    val colors = MaterialTheme.aramColors
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .background(colors.surface2),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = AramIcons.barChart,
+                contentDescription = null,
+                tint = colors.textDim,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        Text(text = "No transactions yet", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = "Your first expense takes ten seconds. Everything else builds from there.",
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.textDim,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(16.dp))
+        AramPrimaryButton(
+            text = "Add expense",
+            icon = AramIcons.add,
+            onClick = onAddTransaction,
+        )
+    }
+}
+
+private fun categoryIcon(iconKey: String?): ImageVector = when (iconKey) {
+    "wallet" -> AramIcons.wallet
+    "food" -> AramIcons.cafe
+    "groceries" -> AramIcons.cart
+    "transport" -> AramIcons.car
+    "home" -> AramIcons.home
+    "utilities" -> AramIcons.receipt
+    "shopping" -> AramIcons.shoppingBag
+    "health" -> AramIcons.shield
+    "fun" -> AramIcons.smile
+    "subscriptions" -> AramIcons.musicNote
+    "salary" -> AramIcons.arrowIn
+    "freelance" -> AramIcons.trending
+    else -> AramIcons.receipt
 }
 
 @Composable
