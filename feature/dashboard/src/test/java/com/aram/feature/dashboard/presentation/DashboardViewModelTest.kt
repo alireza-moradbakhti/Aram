@@ -3,6 +3,8 @@ package com.aram.feature.dashboard.presentation
 import com.aram.core.domain.repository.LedgerDirectory
 import com.aram.core.domain.repository.TransactionRepository
 import com.aram.core.domain.transaction.TransactionDraft
+import com.aram.core.domain.transaction.TransactionFilter
+import com.aram.core.domain.transaction.TransferDraft
 import com.aram.core.model.Account
 import com.aram.core.model.AccountType
 import com.aram.core.model.Category
@@ -19,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -178,6 +181,12 @@ class DashboardViewModelTest {
         override fun observeTransaction(id: String): Flow<Transaction?> =
             rows.map { list -> list.firstOrNull { it.id == id } }
 
+        override fun search(filter: TransactionFilter): Flow<List<Transaction>> =
+            flowOf(emptyList())
+
+        override suspend fun createTransfer(draft: TransferDraft): Outcome<String> =
+            error("unused")
+
         override suspend fun create(draft: TransactionDraft): Outcome<Transaction> =
             error("unused")
 
@@ -185,6 +194,8 @@ class DashboardViewModelTest {
             error("unused")
 
         override suspend fun softDelete(id: String): Outcome<Unit> = error("unused")
+
+        override suspend fun restore(id: String): Outcome<Unit> = error("unused")
     }
 
     private class FakeDirectory : LedgerDirectory {
