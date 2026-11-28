@@ -42,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -49,12 +50,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aram.core.designsystem.AramTheme
 import com.aram.core.designsystem.aramColors
 import com.aram.core.designsystem.component.AmountTextField
 import com.aram.core.designsystem.component.AramIconButton
+import com.aram.core.designsystem.component.AramGhostButton
 import com.aram.core.designsystem.component.AramPrimaryButton
 import com.aram.core.designsystem.component.AramSegmented
 import com.aram.core.designsystem.icon.AramIcons
@@ -77,6 +81,7 @@ import java.util.Locale
 fun AddTransactionRoute(
     onClose: () -> Unit,
     onSaved: () -> Unit,
+    onDeleted: (String) -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: AddTransactionViewModel = hiltViewModel(),
 ) {
@@ -86,6 +91,10 @@ fun AddTransactionRoute(
 
     LaunchedEffect(state.saved) {
         if (state.saved) onSaved()
+    }
+    LaunchedEffect(state.deleted) {
+        val id = state.transactionId
+        if (state.deleted && id != null) onDeleted(id)
     }
 
     ModalBottomSheet(
@@ -109,10 +118,12 @@ fun AddTransactionRoute(
             onTypeChange = viewModel::onTypeChange,
             onAmountChange = viewModel::onAmountChange,
             onAccountSelect = viewModel::onAccountSelected,
+            onTransferAccountSelect = viewModel::onTransferAccountSelected,
             onCategorySelect = viewModel::onCategorySelected,
             onDateSelect = viewModel::onDateSelected,
             onNoteChange = viewModel::onNoteChange,
             onSave = viewModel::onSave,
+            onDelete = viewModel::onDeleteConfirmed,
             onClose = onClose,
         )
     }
@@ -124,17 +135,30 @@ fun AddTransactionScreen(
     onTypeChange: (TransactionType) -> Unit,
     onAmountChange: (String) -> Unit,
     onAccountSelect: (String) -> Unit,
+    onTransferAccountSelect: (String) -> Unit,
     onCategorySelect: (String) -> Unit,
     onDateSelect: (LocalDate) -> Unit,
     onNoteChange: (String) -> Unit,
     onSave: () -> Unit,
+    onDelete: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.aramColors
     var accountPickerOpen by rememberSaveable { mutableStateOf(false) }
+    var transferPickerOpen by rememberSaveable { mutableStateOf(false) }
     var datePickerOpen by rememberSaveable { mutableStateOf(false) }
+    var deleteDialogOpen by rememberSaveable { mutableStateOf(false) }
+    val isTransfer = state.isTransfer
     val isExpense = state.type == TransactionType.EXPENSE
+    val isEditing = state.isEditing
+    val heading = when {
+        isTransfer -> "Transfer money"
+        isEditing && isExpense -> "Edit expense"
+        isEditing -> "Edit income"
+        isExpense -> "Add expense"
+        else -> "Add income"
+    }
 
     Column(
         modifier = modifier
@@ -150,7 +174,7 @@ fun AddTransactionScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = if (isExpense) "Add expense" else "Add income",
+                text = heading,
                 style = MaterialTheme.typography.titleMedium,
             )
             AramIconButton(
@@ -163,10 +187,20 @@ fun AddTransactionScreen(
         Spacer(Modifier.height(12.dp))
 
         AramSegmented(
-            options = listOf("Expense", "Income"),
-            selectedIndex = if (isExpense) 0 else 1,
+            options = listOf("Expense", "Income", "Transfer"),
+            selectedIndex = when (state.type) {
+                TransactionType.EXPENSE -> 0
+                TransactionType.INCOME -> 1
+                TransactionType.TRANSFER -> 2
+            },
             onSelect = { index ->
-                onTypeChange(if (index == 0) TransactionType.EXPENSE else TransactionType.INCOME)
+                onTypeChange(
+                    when (index) {
+                        0 -> TransactionType.EXPENSE
+                        1 -> TransactionType.INCOME
+                        else -> TransactionType.TRANSFER
+                    },
+                )
             },
         )
 
@@ -184,39 +218,41 @@ fun AddTransactionScreen(
 
         Spacer(Modifier.height(14.dp))
 
-        if (state.visibleCategories.isEmpty()) {
-            Text(
-                text = if (state.optionsLoaded) {
-                    "No ${if (isExpense) "expense" else "income"} categories yet."
-                } else {
-                    "Loading categories…"
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.textFaint,
-            )
-        } else {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                state.visibleCategories.forEach { category ->
-                    CategoryChip(
-                        label = category.name,
-                        icon = categoryIcon(category.iconKey),
-                        selected = category.id == state.selectedCategoryId,
-                        onClick = { onCategorySelect(category.id) },
-                    )
+        if (!isTransfer) {
+            if (state.visibleCategories.isEmpty()) {
+                Text(
+                    text = if (state.optionsLoaded) {
+                        "No ${if (state.type == TransactionType.EXPENSE) "expense" else "income"} categories yet."
+                    } else {
+                        "Loading categories…"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.textFaint,
+                )
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    state.visibleCategories.forEach { category ->
+                        CategoryChip(
+                            label = category.name,
+                            icon = categoryIcon(category.iconKey),
+                            selected = category.id == state.selectedCategoryId,
+                            onClick = { onCategorySelect(category.id) },
+                        )
+                    }
                 }
             }
-        }
 
-        Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(14.dp))
+        }
 
         MetaRow(
             icon = AramIcons.wallet,
-            label = "Account",
+            label = if (isTransfer) "From" else "Account",
             value = state.selectedAccount?.let { "${it.name} · ${it.currencyCode}" } ?: "None",
             trailing = if (accountPickerOpen) AramIcons.chevronUp else AramIcons.chevronDown,
             onClick = { accountPickerOpen = !accountPickerOpen },
@@ -232,6 +268,40 @@ fun AddTransactionScreen(
             )
         }
 
+        if (isTransfer) {
+            Spacer(Modifier.height(8.dp))
+            MetaRow(
+                icon = AramIcons.wallet,
+                label = "To account",
+                value = state.transferToAccount
+                    ?.let { "${it.name} · ${it.currencyCode}" }
+                    ?: "Choose account",
+                trailing = if (transferPickerOpen) AramIcons.chevronUp else AramIcons.chevronDown,
+                onClick = { transferPickerOpen = !transferPickerOpen },
+            )
+            AnimatedVisibility(visible = transferPickerOpen) {
+                AccountPicker(
+                    accounts = state.accounts.filter { it.id != state.selectedAccountId },
+                    selectedId = state.transferToAccountId,
+                    onSelect = {
+                        transferPickerOpen = false
+                        onTransferAccountSelect(it)
+                    },
+                )
+            }
+            val source = state.selectedAccount
+            val destination = state.transferToAccount
+            if (source != null && destination != null && !state.transferCurrenciesMatch) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "Both accounts must use the same currency " +
+                        "(${source.currencyCode} → ${destination.currencyCode}).",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                    color = colors.danger,
+                )
+            }
+        }
+
         Spacer(Modifier.height(8.dp))
 
         MetaRow(
@@ -244,6 +314,9 @@ fun AddTransactionScreen(
 
         val fieldMessage = when {
             TransactionField.ACCOUNT in state.invalidFields -> "Choose an account to save."
+            TransactionField.TO_ACCOUNT in state.invalidFields -> "Choose a different destination account."
+            TransactionField.CURRENCY in state.invalidFields ->
+                "Both accounts must use the same currency."
             TransactionField.CATEGORY in state.invalidFields -> "Choose a category to save."
             else -> null
         }
@@ -267,7 +340,12 @@ fun AddTransactionScreen(
         if (state.submitState is SubmitState.Failed) {
             Spacer(Modifier.height(12.dp))
             Text(
-                text = "Couldn't save this ${if (isExpense) "expense" else "income"}. Try again.",
+                text = when {
+                    state.deleteFailed -> "Couldn't delete this transaction. Try again."
+                    isTransfer -> "Couldn't save this transfer. Try again."
+                    isEditing -> "Couldn't save your changes. Try again."
+                    else -> "Couldn't save this ${if (isExpense) "expense" else "income"}. Try again."
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.danger,
             )
@@ -276,12 +354,45 @@ fun AddTransactionScreen(
         Spacer(Modifier.height(16.dp))
 
         AramPrimaryButton(
-            text = if (isExpense) "Save expense" else "Save income",
+            text = when {
+                isTransfer -> "Transfer"
+                isEditing -> "Save changes"
+                isExpense -> "Save expense"
+                else -> "Save income"
+            },
             onClick = onSave,
             enabled = state.canSave,
             loading = state.submitState is SubmitState.Submitting,
             modifier = Modifier.fillMaxWidth(),
         )
+
+        if (isEditing) {
+            Spacer(Modifier.height(4.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .clip(CircleShape)
+                    .clickable(enabled = state.submitState !is SubmitState.Submitting) {
+                        deleteDialogOpen = true
+                    },
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = AramIcons.trash,
+                    contentDescription = null,
+                    tint = colors.danger,
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Delete transaction",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = colors.danger,
+                )
+            }
+        }
     }
 
     if (datePickerOpen) {
@@ -293,6 +404,101 @@ fun AddTransactionScreen(
                 onDateSelect(date)
             },
         )
+    }
+
+    if (deleteDialogOpen) {
+        DeleteTransactionDialog(
+            onDismiss = { deleteDialogOpen = false },
+            onConfirm = {
+                deleteDialogOpen = false
+                onDelete()
+            },
+        )
+    }
+}
+
+@Composable
+private fun DeleteTransactionDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    val colors = MaterialTheme.aramColors
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp)
+                .clip(RoundedCornerShape(26.dp))
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.surfaceVariant,
+                            MaterialTheme.colorScheme.surface,
+                        ),
+                    ),
+                )
+                .border(1.dp, colors.borderStrong, RoundedCornerShape(26.dp))
+                .padding(start = 20.dp, end = 20.dp, top = 22.dp, bottom = 16.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(RoundedCornerShape(17.dp))
+                    .background(colors.dangerSoft)
+                    .border(1.dp, colors.danger.copy(alpha = 0.35f), RoundedCornerShape(17.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = AramIcons.trash,
+                    contentDescription = null,
+                    tint = colors.danger,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+            Text(
+                text = "Delete this transaction?",
+                style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp, lineHeight = 24.sp),
+                modifier = Modifier.padding(top = 14.dp),
+            )
+            Text(
+                text = "You can undo right after. If you're offline, the change syncs later.",
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, lineHeight = 20.sp),
+                color = colors.textDim,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AramGhostButton(
+                    text = "Cancel",
+                    onClick = onDismiss,
+                    modifier = Modifier.height(44.dp),
+                )
+                Box(
+                    modifier = Modifier
+                        .height(44.dp)
+                        .clip(CircleShape)
+                        .background(colors.dangerSoft)
+                        .border(1.dp, colors.danger.copy(alpha = 0.4f), CircleShape)
+                        .clickable(onClick = onConfirm)
+                        .padding(horizontal = 24.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "Delete",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = colors.danger,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -599,10 +805,12 @@ private fun AddTransactionScreenDarkPreview() {
             onTypeChange = {},
             onAmountChange = {},
             onAccountSelect = {},
+            onTransferAccountSelect = {},
             onCategorySelect = {},
             onDateSelect = {},
             onNoteChange = {},
             onSave = {},
+            onDelete = {},
             onClose = {},
             modifier = Modifier.background(MaterialTheme.colorScheme.surface),
         )
@@ -618,10 +826,46 @@ private fun AddTransactionScreenLightPreview() {
             onTypeChange = {},
             onAmountChange = {},
             onAccountSelect = {},
+            onTransferAccountSelect = {},
             onCategorySelect = {},
             onDateSelect = {},
             onNoteChange = {},
             onSave = {},
+            onDelete = {},
+            onClose = {},
+            modifier = Modifier.background(MaterialTheme.colorScheme.surface),
+        )
+    }
+}
+
+@Preview(showBackground = true, widthDp = 360)
+@Composable
+private fun TransferScreenPreview() {
+    AramTheme(darkTheme = false) {
+        AddTransactionScreen(
+            state = previewState(amountInput = "125000").copy(
+                type = TransactionType.TRANSFER,
+                transferToAccountId = "card",
+                accounts = previewState().accounts + Account(
+                    id = "card",
+                    name = "Card",
+                    type = AccountType.BANK,
+                    currencyCode = "USD",
+                    openingBalanceMinor = 0L,
+                    colorArgb = 0xFF3B82F6.toInt(),
+                    iconKey = "card",
+                    archived = false,
+                ),
+            ),
+            onTypeChange = {},
+            onAmountChange = {},
+            onAccountSelect = {},
+            onTransferAccountSelect = {},
+            onCategorySelect = {},
+            onDateSelect = {},
+            onNoteChange = {},
+            onSave = {},
+            onDelete = {},
             onClose = {},
             modifier = Modifier.background(MaterialTheme.colorScheme.surface),
         )

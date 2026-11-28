@@ -16,6 +16,8 @@ import com.aram.core.database.entity.SyncOutboxEntity
 import com.aram.core.database.entity.TransactionEntity
 import com.aram.core.datastore.SessionStore
 import com.aram.core.domain.transaction.TransactionDraft
+import com.aram.core.domain.transaction.TransactionFilter
+import com.aram.core.domain.transaction.TransferDraft
 import com.aram.core.logging.Logger
 import com.aram.core.model.AccountType
 import com.aram.core.model.AppError
@@ -103,6 +105,45 @@ class TransactionRepositoryImplTest {
     }
 
     @Test
+    fun `createTransfer writes a signed pair in one group and never queues a push`() = runTest {
+        val result = repository.createTransfer(transferDraft())
+
+        val groupId = (result as Outcome.Success).value
+        val legs = transactionDao.rows.values.filter { it.transferGroupId == groupId }
+        assertEquals(2, legs.size)
+        assertEquals(setOf(-125_000L, 125_000L), legs.map { it.amountMinor }.toSet())
+        assertEquals(setOf("acc", "card"), legs.map { it.accountId }.toSet())
+        assertTrue(legs.all { it.type == TransactionType.TRANSFER.name && it.categoryId == null })
+        assertTrue(legs.none { it.pendingPush })
+        assertTrue(outbox.rows.isEmpty())
+        assertEquals(0, trigger.scheduled)
+    }
+
+    @Test
+    fun `createTransfer without a session is unauthorized`() = runTest {
+        session.userId.value = null
+
+        val result = repository.createTransfer(transferDraft())
+
+        assertEquals(AppError.Unauthorized, (result as Outcome.Failure).error)
+        assertTrue(transactionDao.rows.isEmpty())
+    }
+
+    @Test
+    fun `deleting a transfer leg tombstones the whole group without queueing`() = runTest {
+        val groupId = (repository.createTransfer(transferDraft()) as Outcome.Success).value
+        val leg = transactionDao.rows.values.first { it.transferGroupId == groupId }
+
+        val result = repository.softDelete(leg.id)
+
+        assertTrue(result is Outcome.Success)
+        val legs = transactionDao.rows.values.filter { it.transferGroupId == groupId }
+        assertTrue(legs.all { it.deletedAt != null })
+        assertTrue(outbox.rows.isEmpty())
+        assertEquals(0, trigger.scheduled)
+    }
+
+    @Test
     fun `create stores a blank note as null`() = runTest {
         repository.create(draft(note = "   "))
 
@@ -161,6 +202,44 @@ class TransactionRepositoryImplTest {
     }
 
     @Test
+    fun `restore clears the tombstone and queues an update`() = runTest {
+        val id = (repository.create(draft()) as Outcome.Success).value.id
+        repository.softDelete(id)
+        val tombstone = transactionDao.rows.getValue(id)
+        val queuedBefore = outbox.rows.size
+
+        val result = repository.restore(id)
+
+        assertTrue(result is Outcome.Success)
+        val row = transactionDao.rows.getValue(id)
+        assertNull(row.deletedAt)
+        assertTrue(row.updatedAt >= tombstone.updatedAt)
+        assertTrue(row.pendingPush)
+        assertEquals(queuedBefore + 1, outbox.rows.size)
+        val entry = outbox.rows.values.last()
+        assertEquals(SyncOutboxEntity.OP_UPDATE, entry.op)
+        assertEquals(id, entry.entityId)
+    }
+
+    @Test
+    fun `restore of a live row queues nothing`() = runTest {
+        val id = (repository.create(draft()) as Outcome.Success).value.id
+        val queuedBefore = outbox.rows.size
+
+        val result = repository.restore(id)
+
+        assertTrue(result is Outcome.Success)
+        assertEquals(queuedBefore, outbox.rows.size)
+    }
+
+    @Test
+    fun `restore of an unknown row is not found`() = runTest {
+        val result = repository.restore("missing")
+
+        assertEquals(AppError.NotFound, (result as Outcome.Failure).error)
+    }
+
+    @Test
     fun `observeTransactions returns the requested range newest first`() = runTest {
         transactionDao.rows["a"] = row("a", occurredAt = 1_000L)
         transactionDao.rows["b"] = row("b", occurredAt = 2_000L)
@@ -190,6 +269,36 @@ class TransactionRepositoryImplTest {
         val result = repository.observeTransactions().first()
 
         assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `search trims the query and forwards every filter`() = runTest {
+        transactionDao.rows["a"] = row("a", occurredAt = 1_500L, note = "Lunch box")
+
+        val result = repository.search(
+            TransactionFilter(
+                query = "  lunch  ",
+                type = TransactionType.EXPENSE,
+                categoryId = "cat",
+                fromInclusive = 1_000L,
+                toExclusive = 2_000L,
+            ),
+        ).first()
+
+        assertEquals(listOf("a"), result.map { it.id })
+        assertEquals("lunch", transactionDao.lastFilter?.query)
+        assertEquals(TransactionType.EXPENSE, transactionDao.lastFilter?.type)
+        assertEquals("cat", transactionDao.lastFilter?.categoryId)
+        assertEquals(1_000L, transactionDao.lastFilter?.fromInclusive)
+        assertEquals(2_000L, transactionDao.lastFilter?.toExclusive)
+    }
+
+    @Test
+    fun `search without a session emits empty`() = runTest {
+        session.userId.value = null
+        transactionDao.rows["a"] = row("a", occurredAt = 1_500L)
+
+        assertTrue(repository.search(TransactionFilter(query = "a")).first().isEmpty())
     }
 
     @Test
@@ -246,10 +355,20 @@ class TransactionRepositoryImplTest {
         note = note,
     )
 
+    private fun transferDraft() = TransferDraft(
+        fromAccountId = "acc",
+        toAccountId = "card",
+        amountMinor = 125_000L,
+        currencyCode = "IRR",
+        occurredAt = 1_700_000_000_000L,
+        note = " Move to card ",
+    )
+
     private fun row(
         id: String,
         occurredAt: Long,
         deletedAt: Long? = null,
+        note: String? = null,
     ) = TransactionEntity(
         id = id,
         userId = "user-1",
@@ -259,7 +378,7 @@ class TransactionRepositoryImplTest {
         amountMinor = 1_000L,
         currencyCode = "IRR",
         occurredAt = occurredAt,
-        note = null,
+        note = note,
         transferGroupId = null,
         recurringRuleId = null,
         createdAt = 0L,

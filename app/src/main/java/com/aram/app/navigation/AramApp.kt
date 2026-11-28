@@ -5,8 +5,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -22,10 +24,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.aram.core.designsystem.component.AramBackground
 import com.aram.core.designsystem.component.AramBottomBar
 import com.aram.core.designsystem.component.AramFab
@@ -44,11 +48,13 @@ import com.aram.feature.onboarding.presentation.EntryRoute
 import com.aram.feature.settings.presentation.DebugScenarioOption
 import com.aram.feature.settings.presentation.SettingsRoute
 import com.aram.feature.transactions.presentation.AddTransactionRoute
+import com.aram.feature.transactions.presentation.TRANSACTION_ID_ARG
 import com.aram.feature.transactions.presentation.TransactionsRoute
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private const val ADD_TRANSACTION_ROUTE = "add-transaction"
+private const val EDIT_TRANSACTION_ROUTE = "transaction/{$TRANSACTION_ID_ARG}"
 private const val SPLASH_MILLIS = 650L
 
 @Composable
@@ -56,6 +62,7 @@ fun AramApp(
     sessionState: UiState<UserProfile>,
     onRetrySession: () -> Unit,
     onSignOut: () -> Unit,
+    onUndoDelete: (String) -> Unit = {},
     showDebugActions: Boolean,
     debugScenario: MockScenario? = null,
     onSelectDebugScenario: (MockScenario) -> Unit = {},
@@ -86,6 +93,7 @@ fun AramApp(
         is UiState.Content -> MainScaffold(
             profile = sessionState.data,
             onSignOut = onSignOut,
+            onUndoDelete = onUndoDelete,
             showDebugActions = showDebugActions,
             debugScenario = debugScenario,
             onSelectDebugScenario = onSelectDebugScenario,
@@ -128,6 +136,7 @@ private val tabs = listOf(
 private fun MainScaffold(
     profile: UserProfile,
     onSignOut: () -> Unit,
+    onUndoDelete: (String) -> Unit,
     showDebugActions: Boolean,
     debugScenario: MockScenario?,
     onSelectDebugScenario: (MockScenario) -> Unit,
@@ -139,6 +148,7 @@ private fun MainScaffold(
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
     val isAddRoute = currentDestination?.route == ADD_TRANSACTION_ROUTE
+    val isSheetRoute = isAddRoute || currentDestination?.route == EDIT_TRANSACTION_ROUTE
     val currentTab = MainTab.entries.firstOrNull { tab ->
         currentDestination?.hierarchy?.any { it.route == tab.route } == true
     } ?: MainTab.Home
@@ -158,12 +168,14 @@ private fun MainScaffold(
                 SnackbarHost(hostState = snackbarHostState) { data ->
                     AramToast(
                         message = data.visuals.message,
+                        actionLabel = data.visuals.actionLabel,
+                        onAction = { data.performAction() },
                         modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
                     )
                 }
             },
             bottomBar = {
-                if (!isAddRoute) {
+                if (!isSheetRoute) {
                     Box(Modifier.navigationBarsPadding()) {
                         AramBottomBar(
                             tabs = tabs,
@@ -174,7 +186,7 @@ private fun MainScaffold(
                 }
             },
             floatingActionButton = {
-                if ((currentTab == MainTab.Home || currentTab == MainTab.Activity) && !isAddRoute) {
+                if ((currentTab == MainTab.Home || currentTab == MainTab.Activity) && !isSheetRoute) {
                     AramFab(
                         onClick = { navController.navigate(ADD_TRANSACTION_ROUTE) },
                         contentDescription = "Add transaction",
@@ -197,6 +209,9 @@ private fun MainScaffold(
                 composable(MainTab.Activity.route) {
                     TransactionsRoute(
                         onAddTransaction = { navController.navigate(ADD_TRANSACTION_ROUTE) },
+                        onOpenTransaction = { id ->
+                            navController.navigate("transaction/$id")
+                        },
                     )
                 }
                 composable(MainTab.Budgets.route) {
@@ -233,6 +248,35 @@ private fun MainScaffold(
                             navController.popBackStack()
                             navigateTo(MainTab.Activity)
                             scope.launch { snackbarHostState.showSnackbar("Transaction saved") }
+                        },
+                    )
+                }
+                composable(
+                    route = EDIT_TRANSACTION_ROUTE,
+                    arguments = listOf(
+                        navArgument(TRANSACTION_ID_ARG) { type = NavType.StringType },
+                    ),
+                ) {
+                    AddTransactionRoute(
+                        onClose = { navController.popBackStack() },
+                        onSaved = {
+                            navController.popBackStack()
+                            navigateTo(MainTab.Activity)
+                            scope.launch { snackbarHostState.showSnackbar("Changes saved") }
+                        },
+                        onDeleted = { id ->
+                            navController.popBackStack()
+                            navigateTo(MainTab.Activity)
+                            scope.launch {
+                                val result = snackbarHostState.showSnackbar(
+                                    message = "Transaction deleted",
+                                    actionLabel = "Undo",
+                                    duration = SnackbarDuration.Long,
+                                )
+                                if (result == SnackbarResult.ActionPerformed) {
+                                    onUndoDelete(id)
+                                }
+                            }
                         },
                     )
                 }
