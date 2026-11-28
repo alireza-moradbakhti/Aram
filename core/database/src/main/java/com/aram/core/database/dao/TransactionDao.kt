@@ -106,7 +106,7 @@ interface TransactionDao {
     @Query(
         "SELECT COALESCE(SUM(amountMinor), 0) FROM transactions " +
             "WHERE userId = :userId AND type = :type AND deletedAt IS NULL " +
-            "AND occurredAt BETWEEN :fromInclusive AND :toExclusive",
+            "AND occurredAt >= :fromInclusive AND occurredAt < :toExclusive",
     )
     fun observeTotal(userId: String, type: String, fromInclusive: Long, toExclusive: Long): Flow<Long>
 
