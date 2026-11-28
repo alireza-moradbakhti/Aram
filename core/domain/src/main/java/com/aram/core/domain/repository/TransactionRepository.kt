@@ -26,4 +26,7 @@ interface TransactionRepository {
 
     /** Marks the row as deleted; it stays as a tombstone for sync. */
     suspend fun softDelete(id: String): Outcome<Unit>
+
+    /** Reverses [softDelete]: clears the tombstone and queues the row again. */
+    suspend fun restore(id: String): Outcome<Unit>
 }

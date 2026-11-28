@@ -3,6 +3,7 @@ package com.aram.feature.transactions.presentation
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -67,6 +68,7 @@ import kotlin.math.abs
 @Composable
 fun TransactionsRoute(
     onAddTransaction: () -> Unit,
+    onOpenTransaction: (String) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: TransactionsViewModel = hiltViewModel(),
 ) {
@@ -77,6 +79,7 @@ fun TransactionsRoute(
         onNextMonth = viewModel::onNextMonth,
         onScopeChange = viewModel::onScopeChange,
         onAddTransaction = onAddTransaction,
+        onTransactionClick = onOpenTransaction,
         onRefresh = viewModel::onRefresh,
         onRetryQueued = viewModel::onRetryQueued,
         modifier = modifier,
@@ -93,6 +96,7 @@ fun TransactionsScreen(
     onAddTransaction: () -> Unit,
     onRefresh: () -> Unit,
     onRetryQueued: () -> Unit = {},
+    onTransactionClick: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val month = state.month
@@ -217,6 +221,7 @@ fun TransactionsScreen(
                     group = group,
                     today = state.today,
                     fractionDigits = state.currency.fractionDigits,
+                    onTransactionClick = onTransactionClick,
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
@@ -322,6 +327,7 @@ private fun DayGroup(
     group: DayGroupUi,
     today: LocalDate,
     fractionDigits: Int,
+    onTransactionClick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.aramColors
@@ -354,7 +360,11 @@ private fun DayGroup(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
         ) {
             group.transactions.forEachIndexed { index, transaction ->
-                TransactionRow(transaction, showDivider = index != group.transactions.lastIndex)
+                TransactionRow(
+                    transaction = transaction,
+                    showDivider = index != group.transactions.lastIndex,
+                    onClick = { onTransactionClick(transaction.id) },
+                )
             }
         }
     }
@@ -364,12 +374,14 @@ private fun DayGroup(
 private fun TransactionRow(
     transaction: TransactionRowUi,
     showDivider: Boolean,
+    onClick: () -> Unit,
 ) {
     val colors = MaterialTheme.aramColors
     Column {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .clickable(onClick = onClick)
                 .padding(vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
