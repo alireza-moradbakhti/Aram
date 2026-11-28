@@ -88,7 +88,10 @@ class DashboardSkeletonRenderTest {
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background),
             ) {
-                DashboardScreen(displayName = "Aram", isLoading = isLoading)
+                DashboardScreen(
+                    displayName = "Aram",
+                    state = DashboardUiState(isLoading = isLoading),
+                )
             }
         }
     }
