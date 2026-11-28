@@ -7,6 +7,7 @@ import com.aram.core.domain.repository.LedgerLookup
 import com.aram.core.domain.repository.TransactionRepository
 import com.aram.core.domain.transaction.TransactionDraft
 import com.aram.core.domain.transaction.TransactionField
+import com.aram.core.domain.transaction.TransactionFilter
 import com.aram.core.domain.usecase.CreateTransaction
 import com.aram.core.domain.usecase.DeleteTransaction
 import com.aram.core.domain.usecase.UpdateTransaction
@@ -299,6 +300,9 @@ class AddTransactionViewModelTest {
         ): Flow<List<Transaction>> = flowOf(emptyList())
 
         override fun observeRecent(limit: Int): Flow<List<Transaction>> = flowOf(emptyList())
+
+        override fun search(filter: TransactionFilter): Flow<List<Transaction>> =
+            flowOf(emptyList())
 
         override fun observeTransaction(id: String): Flow<Transaction?> = stored
 

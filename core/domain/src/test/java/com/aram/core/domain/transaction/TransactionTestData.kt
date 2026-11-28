@@ -90,6 +90,8 @@ internal class FakeTransactionRepository : TransactionRepository {
 
     override fun observeRecent(limit: Int): Flow<List<Transaction>> = flowOf(emptyList())
 
+    override fun search(filter: TransactionFilter): Flow<List<Transaction>> = flowOf(emptyList())
+
     override fun observeTransaction(id: String): Flow<Transaction?> = flowOf(null)
 
     override suspend fun create(draft: TransactionDraft): Outcome<Transaction> {
