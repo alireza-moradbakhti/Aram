@@ -7,7 +7,7 @@ plugins {
 android {
     namespace = "com.aram.core.datastore"
     compileSdk {
-        version = release(37)
+        version = release(37) { minorApiLevel = 2 }
     }
 
     defaultConfig {
