@@ -369,6 +369,7 @@ fun AramMonthNav(
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     modifier: Modifier = Modifier,
+    onCurrentMonth: (() -> Unit)? = null,
 ) {
     val colors = MaterialTheme.aramColors
     Row(
@@ -397,6 +398,22 @@ fun AramMonthNav(
                 color = colors.textFaint,
                 textAlign = TextAlign.Center,
             )
+        }
+        if (onCurrentMonth != null) {
+            Box(
+                modifier = Modifier
+                    .height(40.dp)
+                    .clip(CircleShape)
+                    .clickable(onClick = onCurrentMonth)
+                    .padding(horizontal = 10.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "This month",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = colors.primaryHi,
+                )
+            }
         }
         NavArrow(
             icon = AramIcons.chevronRight,

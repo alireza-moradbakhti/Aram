@@ -1,18 +1,21 @@
 package com.aram.feature.budgets.presentation
 
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
@@ -20,17 +23,20 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aram.core.designsystem.AramTextStyles
 import com.aram.core.designsystem.aramColors
 import com.aram.core.designsystem.component.AramAppBar
@@ -44,22 +50,48 @@ import com.aram.core.designsystem.component.AramPrimaryButton
 import com.aram.core.designsystem.component.GlassCard
 import com.aram.core.designsystem.icon.AramIcons
 import com.aram.core.designsystem.text.formatAmount
+import com.aram.core.designsystem.text.formatMinor
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 
-@Composable
-fun BudgetsScreen(modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    val colors = MaterialTheme.aramColors
-    var monthOffset by remember { mutableIntStateOf(0) }
-    val month = YearMonth.of(2026, 10).plusMonths(monthOffset.toLong())
-    val monthTitle = remember(month) {
-        month.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.US))
-    }
-    val resetDay = month.plusMonths(1).month.getDisplayName(TextStyle.SHORT, Locale.US)
+internal const val BUDGETS_SKELETON_TAG = "budgets-skeleton"
+internal const val TOTAL_PROGRESS_TAG = "budget-progress-total"
+internal fun rowProgressTag(id: String): String = "budget-progress-$id"
 
+@Composable
+fun BudgetsRoute(
+    onCreateBudget: () -> Unit = {},
+    onOpenBudget: (String) -> Unit = {},
+    onOpenSettings: () -> Unit = {},
+    modifier: Modifier = Modifier,
+    viewModel: BudgetsViewModel = hiltViewModel(),
+) {
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    BudgetsScreen(
+        state = state,
+        onPreviousMonth = viewModel::onPreviousMonth,
+        onNextMonth = viewModel::onNextMonth,
+        onCurrentMonth = viewModel::onCurrentMonth,
+        onCreateBudget = onCreateBudget,
+        onOpenBudget = onOpenBudget,
+        onOpenSettings = onOpenSettings,
+        modifier = modifier,
+    )
+}
+
+@Composable
+fun BudgetsScreen(
+    state: BudgetsUiState,
+    modifier: Modifier = Modifier,
+    onPreviousMonth: () -> Unit = {},
+    onNextMonth: () -> Unit = {},
+    onCurrentMonth: () -> Unit = {},
+    onCreateBudget: () -> Unit = {},
+    onOpenBudget: (String) -> Unit = {},
+    onOpenSettings: () -> Unit = {},
+) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -71,129 +103,189 @@ fun BudgetsScreen(modifier: Modifier = Modifier) {
             AramIconButton(
                 icon = AramIcons.tune,
                 contentDescription = "Budget settings",
-                onClick = { toast(context, "Budget settings (demo)") },
+                onClick = onOpenSettings,
             )
         }
 
         AramMonthNav(
-            title = monthTitle,
-            subtitle = "Resets 1 $resetDay · 20 days left",
-            onPrevious = { monthOffset-- },
-            onNext = { monthOffset++ },
+            title = monthTitle(state.month),
+            subtitle = monthSubtitle(state),
+            onPrevious = onPreviousMonth,
+            onNext = onNextMonth,
+            onCurrentMonth = onCurrentMonth.takeUnless { state.isCurrentMonth },
         )
 
-        GlassCard(
-            modifier = Modifier.padding(top = 4.dp),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "TOTAL BUDGET",
-                    fontSize = 11.sp,
-                    letterSpacing = 0.9.sp,
-                    color = colors.textFaint,
-                )
-                AramChip(text = "On track", tone = AramChipTone.Positive)
-            }
-            Row(
-                modifier = Modifier.padding(top = 12.dp),
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                Text(
-                    text = formatAmount(12_000_000L),
-                    style = AramTextStyles.heroAmountCompact,
-                )
-                Text(
-                    text = "IRR",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = colors.textFaint,
-                    modifier = Modifier.padding(start = 6.dp, bottom = 4.dp),
-                )
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                MoneyLine(text = "${formatAmount(8_160_000L)} spent")
-                MoneyLine(text = "${formatAmount(3_840_000L)} left")
-            }
-            AramBar(
-                progress = 0.68f,
-                modifier = Modifier.padding(top = 10.dp),
-                height = 10,
+        when {
+            state.loading -> BudgetsSkeleton()
+            state.isEmpty -> EmptyBudgets(
+                month = state.month,
+                isCurrentMonth = state.isCurrentMonth,
+                onCreateBudget = onCreateBudget,
             )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                MoneyLine(text = "≈ 137,000 / day", faint = true)
-                MoneyLine(text = "32% remaining", faint = true)
-            }
+            else -> BudgetsContent(state = state, onCreateBudget = onCreateBudget, onOpenBudget = onOpenBudget)
         }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 24.dp, bottom = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(text = "Categories", style = MaterialTheme.typography.titleMedium)
-            Text(
-                text = "4 active",
-                style = MaterialTheme.typography.labelSmall,
-                color = colors.textFaint,
-            )
-        }
-
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            budgetItems.forEach { item ->
-                BudgetRow(item = item) { toast(context, "Edit ${item.name} budget") }
-            }
-        }
-
-        AramPrimaryButton(
-            text = "New budget",
-            icon = AramIcons.add,
-            onClick = { toast(context, "New budget sheet (demo)") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 16.dp),
-        )
-        Text(
-            text = "Unused budget rolls into Savings on 1 $resetDay.",
-            style = MaterialTheme.typography.labelSmall,
-            color = colors.textFaint,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 12.dp),
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-        )
     }
 }
 
 @Composable
-private fun BudgetRow(item: BudgetItemUi, onClick: () -> Unit) {
+private fun BudgetsContent(
+    state: BudgetsUiState,
+    onCreateBudget: () -> Unit,
+    onOpenBudget: (String) -> Unit,
+) {
+    val fractionDigits = state.fractionDigits
+    TotalBudgetCard(state = state, fractionDigits = fractionDigits)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 24.dp, bottom = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text = "Categories", style = MaterialTheme.typography.titleMedium)
+        Text(
+            text = "${state.rows.size} active",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.aramColors.textFaint,
+        )
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        state.rows.forEach { row ->
+            BudgetRow(item = row, onClick = { onOpenBudget(row.id) })
+        }
+    }
+
+    AramPrimaryButton(
+        text = "New budget",
+        icon = AramIcons.add,
+        onClick = onCreateBudget,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 16.dp),
+    )
+    Text(
+        text = rolloverNote(state.month),
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.aramColors.textFaint,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp),
+        textAlign = TextAlign.Center,
+    )
+}
+
+@Composable
+private fun TotalBudgetCard(state: BudgetsUiState, fractionDigits: Int) {
     val colors = MaterialTheme.aramColors
-    val (iconTint, iconBackground, iconBorder) = when (item.tone) {
-        BudgetTone.Ok -> Triple(colors.primaryHi, colors.successSoft, Color(0x420E9F6E))
-        BudgetTone.Warn -> Triple(colors.secondaryHi, colors.warningSoft, Color(0x47D97706))
-        BudgetTone.Danger -> Triple(colors.danger, colors.dangerSoft, Color(0x3DFFB4AB))
+    val spent = formatMinor(state.totalSpentMinor, fractionDigits)
+    val left = formatMinor(state.totalRemainingMinor, fractionDigits)
+    val limit = formatMinor(state.totalLimitMinor, fractionDigits)
+    val spoken = "Total budget: $limit ${state.currencyCode}. " +
+        "$spent spent, $left left, ${state.totalPercentUsed}% used."
+    val (chipText, chipTone) = when (state.status) {
+        BudgetStatus.ON_TRACK -> "On track" to AramChipTone.Positive
+        BudgetStatus.NEAR_LIMIT -> "Near limit" to AramChipTone.Warning
+        BudgetStatus.OVER -> "Over budget" to AramChipTone.Danger
     }
     GlassCard(
         modifier = Modifier
+            .padding(top = 4.dp)
+            .semantics(mergeDescendants = true) { contentDescription = spoken },
+        contentPadding = PaddingValues(20.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "TOTAL BUDGET",
+                fontSize = 11.sp,
+                letterSpacing = 0.9.sp,
+                color = colors.textFaint,
+            )
+            AramChip(text = chipText, tone = chipTone)
+        }
+        Row(
+            modifier = Modifier.padding(top = 12.dp),
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            Text(
+                text = formatAmount(state.totalLimitMinor),
+                style = AramTextStyles.heroAmountCompact,
+            )
+            Text(
+                text = state.currencyCode,
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.textFaint,
+                modifier = Modifier.padding(start = 6.dp, bottom = 4.dp),
+            )
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            MoneyLine(text = "$spent spent")
+            MoneyLine(text = "$left left")
+        }
+        BudgetBar(
+            fraction = state.totalFraction,
+            tone = when (state.status) {
+                BudgetStatus.ON_TRACK -> AramBarTone.Positive
+                BudgetStatus.NEAR_LIMIT -> AramBarTone.Warning
+                BudgetStatus.OVER -> AramBarTone.Danger
+            },
+            height = 10,
+            modifier = Modifier
+                .padding(top = 10.dp)
+                .testTag(TOTAL_PROGRESS_TAG),
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            val perDay = if (state.daysLeft > 0) {
+                "≈ ${formatMinor(state.perDayMinor, fractionDigits)} / day"
+            } else {
+                "Month ended"
+            }
+            MoneyLine(text = perDay, faint = true)
+            MoneyLine(
+                text = "${(100 - state.totalPercentUsed).coerceAtLeast(0)}% remaining",
+                faint = true,
+            )
+        }
+    }
+}
+
+@Composable
+private fun BudgetRow(item: BudgetRowUi, onClick: () -> Unit) {
+    val colors = MaterialTheme.aramColors
+    val (iconTint, iconBackground, iconBorder) = when (item.tone) {
+        BudgetRowTone.OK -> Triple(colors.primaryHi, colors.successSoft, Color(0x420E9F6E))
+        BudgetRowTone.NEAR_LIMIT -> Triple(colors.secondaryHi, colors.warningSoft, Color(0x47D97706))
+        BudgetRowTone.OVER -> Triple(colors.danger, colors.dangerSoft, Color(0x3DFFB4AB))
+    }
+    val spent = formatMinor(item.spentMinor, item.fractionDigits)
+    val limit = formatMinor(item.limitMinor, item.fractionDigits)
+    val left = "${formatMinor(item.remainingMinor, item.fractionDigits)} left"
+    val over = " over by ${formatMinor(item.overByMinor, item.fractionDigits)}"
+    val spoken = "${item.name} budget: $limit ${item.currencyCode} limit, $spent spent, " +
+        "$left, ${item.percentUsed}% used" +
+        if (item.tone == BudgetRowTone.OVER) "$over." else "."
+    GlassCard(
+        modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .semantics(mergeDescendants = true) { contentDescription = spoken },
         shape = RoundedCornerShape(18.dp),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -205,7 +297,7 @@ private fun BudgetRow(item: BudgetItemUi, onClick: () -> Unit) {
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = item.icon,
+                    imageVector = budgetCategoryIcon(item.iconKey),
                     contentDescription = null,
                     tint = iconTint,
                     modifier = Modifier.size(18.dp),
@@ -221,21 +313,24 @@ private fun BudgetRow(item: BudgetItemUi, onClick: () -> Unit) {
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    Text(text = item.name, style = MaterialTheme.typography.bodyMedium)
                     Text(
-                        text = item.name,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        text = "${formatAmount(item.spent)} / ${formatAmount(item.limit)}",
+                        text = "$spent / $limit",
                         style = MaterialTheme.typography.labelSmall,
                         color = colors.textFaint,
                     )
                 }
-                AramBar(
-                    progress = item.progress,
-                    modifier = Modifier.padding(top = 6.dp),
-                    tone = item.barTone,
+                BudgetBar(
+                    fraction = item.fraction,
+                    tone = when (item.tone) {
+                        BudgetRowTone.OK -> AramBarTone.Positive
+                        BudgetRowTone.NEAR_LIMIT -> AramBarTone.Warning
+                        BudgetRowTone.OVER -> AramBarTone.Danger
+                    },
                     height = 6,
+                    modifier = Modifier
+                        .padding(top = 6.dp)
+                        .testTag(rowProgressTag(item.id)),
                 )
                 Row(
                     modifier = Modifier
@@ -244,16 +339,22 @@ private fun BudgetRow(item: BudgetItemUi, onClick: () -> Unit) {
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Text(
-                        text = item.foot,
+                        text = when (item.tone) {
+                            BudgetRowTone.OVER ->
+                                "${item.percentUsed}% used ·" + over
+                            BudgetRowTone.NEAR_LIMIT ->
+                                "${item.percentUsed}% used · near limit"
+                            BudgetRowTone.OK -> "${item.percentUsed}% used"
+                        },
                         style = MaterialTheme.typography.labelSmall,
                         color = when (item.tone) {
-                            BudgetTone.Warn -> colors.secondaryHi
-                            BudgetTone.Danger -> colors.danger
-                            BudgetTone.Ok -> colors.textFaint
+                            BudgetRowTone.OVER -> colors.danger
+                            BudgetRowTone.NEAR_LIMIT -> colors.secondaryHi
+                            BudgetRowTone.OK -> colors.textFaint
                         },
                     )
                     Text(
-                        text = item.rightFoot,
+                        text = left,
                         style = MaterialTheme.typography.labelSmall,
                         color = colors.textFaint,
                     )
@@ -261,6 +362,135 @@ private fun BudgetRow(item: BudgetItemUi, onClick: () -> Unit) {
             }
         }
     }
+}
+
+/** Progress semantics belong on the bar so TalkBack reads a value, not just a hue. */
+@Composable
+private fun BudgetBar(
+    fraction: Float,
+    tone: AramBarTone,
+    height: Int,
+    modifier: Modifier = Modifier,
+) {
+    AramBar(
+        progress = fraction,
+        tone = tone,
+        height = height,
+        modifier = modifier.semantics {
+            progressBarRangeInfo =
+                androidx.compose.ui.semantics.ProgressBarRangeInfo(fraction, 0f..1f)
+        },
+    )
+}
+
+@Composable
+private fun EmptyBudgets(month: YearMonth, isCurrentMonth: Boolean, onCreateBudget: () -> Unit) {
+    val colors = MaterialTheme.aramColors
+    GlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 28.dp),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(CircleShape)
+                    .background(colors.surface2)
+                    .border(1.dp, colors.border, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = AramIcons.budgets,
+                    contentDescription = null,
+                    tint = colors.textDim,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+            Text(
+                text = if (isCurrentMonth) "No budgets yet" else "No budgets in ${monthTitle(month)}",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(top = 14.dp),
+            )
+            Text(
+                text = "Set one cap for groceries and Aram will watch the rest of the month for you.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.textDim,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+            Spacer(Modifier.height(18.dp))
+            AramPrimaryButton(
+                text = "Create budget",
+                icon = AramIcons.add,
+                onClick = onCreateBudget,
+            )
+        }
+    }
+}
+
+@Composable
+private fun BudgetsSkeleton() {
+    val colors = MaterialTheme.aramColors
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(BUDGETS_SKELETON_TAG),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        GlassCard(
+            modifier = Modifier.padding(top = 4.dp),
+            contentPadding = PaddingValues(20.dp),
+        ) {
+            SkeletonBlock(widthFraction = 0.4f, height = 10.dp, color = colors.surface2)
+            SkeletonBlock(
+                widthFraction = 0.55f,
+                height = 30.dp,
+                color = colors.surface2,
+                modifier = Modifier.padding(top = 14.dp),
+            )
+            SkeletonBlock(
+                widthFraction = 1f,
+                height = 10.dp,
+                color = colors.surface2,
+                modifier = Modifier.padding(top = 16.dp),
+            )
+        }
+        repeat(3) {
+            GlassCard(
+                shape = RoundedCornerShape(18.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+            ) {
+                SkeletonBlock(widthFraction = 0.5f, height = 12.dp, color = colors.surface2)
+                SkeletonBlock(
+                    widthFraction = 1f,
+                    height = 6.dp,
+                    color = colors.surface2,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SkeletonBlock(
+    widthFraction: Float,
+    height: androidx.compose.ui.unit.Dp,
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth(widthFraction)
+            .height(height)
+            .clip(CircleShape)
+            .background(color),
+    )
 }
 
 @Composable
@@ -272,69 +502,38 @@ private fun MoneyLine(text: String, faint: Boolean = false) {
     )
 }
 
-private enum class BudgetTone { Ok, Warn, Danger }
-
-private data class BudgetItemUi(
-    val name: String,
-    val spent: Long,
-    val limit: Long,
-    val progress: Float,
-    val icon: ImageVector,
-    val tone: BudgetTone,
-    val foot: String,
-    val rightFoot: String,
-) {
-    val barTone: AramBarTone
-        get() = when (tone) {
-            BudgetTone.Ok -> AramBarTone.Positive
-            BudgetTone.Warn -> AramBarTone.Warning
-            BudgetTone.Danger -> AramBarTone.Danger
-        }
+internal fun budgetCategoryIcon(iconKey: String): ImageVector = when (iconKey) {
+    "wallet" -> AramIcons.wallet
+    "food" -> AramIcons.cafe
+    "groceries" -> AramIcons.cart
+    "transport" -> AramIcons.car
+    "home" -> AramIcons.home
+    "utilities" -> AramIcons.receipt
+    "shopping" -> AramIcons.shoppingBag
+    "health" -> AramIcons.shield
+    "fun" -> AramIcons.smile
+    "subscriptions" -> AramIcons.musicNote
+    "salary" -> AramIcons.arrowIn
+    "freelance" -> AramIcons.trending
+    else -> AramIcons.receipt
 }
 
-private val budgetItems = listOf(
-    BudgetItemUi(
-        name = "Groceries",
-        spent = 4_120_000L,
-        limit = 6_000_000L,
-        progress = 0.68f,
-        icon = AramIcons.cart,
-        tone = BudgetTone.Ok,
-        foot = "68% used",
-        rightFoot = "1,880,000 left",
-    ),
-    BudgetItemUi(
-        name = "Dining out",
-        spent = 1_760_000L,
-        limit = 2_000_000L,
-        progress = 0.88f,
-        icon = AramIcons.restaurant,
-        tone = BudgetTone.Warn,
-        foot = "88% used · near limit",
-        rightFoot = "240,000 left",
-    ),
-    BudgetItemUi(
-        name = "Transport",
-        spent = 1_050_000L,
-        limit = 2_500_000L,
-        progress = 0.42f,
-        icon = AramIcons.car,
-        tone = BudgetTone.Ok,
-        foot = "42% used",
-        rightFoot = "1,450,000 left",
-    ),
-    BudgetItemUi(
-        name = "Subscriptions",
-        spent = 672_000L,
-        limit = 600_000L,
-        progress = 1f,
-        icon = AramIcons.musicNote,
-        tone = BudgetTone.Danger,
-        foot = "112% used · over by 72,000",
-        rightFoot = "0 left",
-    ),
-)
+internal fun monthTitle(month: YearMonth): String =
+    month.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.US))
 
-private fun toast(context: android.content.Context, message: String) {
-    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+internal fun monthSubtitle(state: BudgetsUiState): String {
+    val next = state.month.plusMonths(1).month.getDisplayName(TextStyle.SHORT, Locale.US)
+    return when {
+        state.daysLeft <= 0 -> "Closed 1 $next"
+        state.isCurrentMonth -> "Resets 1 $next · ${daysLabel(state.daysLeft)} left"
+        else -> "Starts 1 ${state.month.month.getDisplayName(TextStyle.SHORT, Locale.US)} · " +
+            daysLabel(state.daysLeft)
+    }
+}
+
+private fun daysLabel(days: Int): String = "$days ${if (days == 1) "day" else "days"}"
+
+private fun rolloverNote(month: YearMonth): String {
+    val next = month.plusMonths(1).month.getDisplayName(TextStyle.SHORT, Locale.US)
+    return "Unused budget rolls into Savings on 1 $next."
 }
