@@ -162,8 +162,24 @@ class FakeTransactionDao : TransactionDao {
         var changed = 0
         rows.replaceAll { id, row ->
             val inRange = row.userId == userId && row.deletedAt == null && !row.pendingPush &&
+                row.transferGroupId == null &&
                 row.occurredAt >= fromInclusive && row.occurredAt < toExclusive
             if (inRange && id !in keepIds) {
+                changed++
+                row.copy(deletedAt = deletedAt, updatedAt = deletedAt)
+            } else {
+                row
+            }
+        }
+        return changed
+    }
+
+    fun softDeleteTransferGroup(userId: String, transferGroupId: String, deletedAt: Long): Int {
+        var changed = 0
+        rows.replaceAll { _, row ->
+            val matches = row.userId == userId && row.transferGroupId == transferGroupId &&
+                row.deletedAt == null
+            if (matches) {
                 changed++
                 row.copy(deletedAt = deletedAt, updatedAt = deletedAt)
             } else {
@@ -425,6 +441,9 @@ class FakeLedgerWriteDao(
 
     override suspend fun upsertTransaction(transaction: TransactionEntity) = transactions.upsert(transaction)
 
+    override suspend fun upsertTransactions(transactions: List<TransactionEntity>) =
+        transactions.forEach { this.transactions.upsert(it) }
+
     override suspend fun insertOutbox(entry: SyncOutboxEntity) = outbox.insert(entry)
 
     override suspend fun updateRow(
@@ -444,6 +463,12 @@ class FakeLedgerWriteDao(
 
     override suspend fun deleteRow(userId: String, id: String, deletedAt: Long): Int =
         transactions.softDelete(userId, id, deletedAt)
+
+    override suspend fun deleteTransferRows(
+        userId: String,
+        transferGroupId: String,
+        deletedAt: Long,
+    ): Int = transactions.softDeleteTransferGroup(userId, transferGroupId, deletedAt)
 }
 
 class FakeOutboxTrigger : OutboxTrigger {

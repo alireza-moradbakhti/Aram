@@ -22,10 +22,13 @@ interface TransactionDao {
     /**
      * Tombstones rows that the server no longer returns for a fully pulled
      * month. Rows awaiting push or edited after the pull started are spared.
+     * Transfer legs are local-only (the API has no transfer kind), so the
+     * sweep never considers them.
      */
     @Query(
         "UPDATE transactions SET deletedAt = :deletedAt, updatedAt = :deletedAt, pendingPush = 0 " +
             "WHERE userId = :userId AND deletedAt IS NULL AND pendingPush = 0 " +
+            "AND transferGroupId IS NULL " +
             "AND occurredAt >= :fromInclusive AND occurredAt < :toExclusive " +
             "AND id NOT IN (:keepIds)",
     )
@@ -40,6 +43,7 @@ interface TransactionDao {
     @Query(
         "UPDATE transactions SET deletedAt = :deletedAt, updatedAt = :deletedAt, pendingPush = 0 " +
             "WHERE userId = :userId AND deletedAt IS NULL AND pendingPush = 0 " +
+            "AND transferGroupId IS NULL " +
             "AND occurredAt >= :fromInclusive AND occurredAt < :toExclusive",
     )
     suspend fun softDeleteAllInRange(

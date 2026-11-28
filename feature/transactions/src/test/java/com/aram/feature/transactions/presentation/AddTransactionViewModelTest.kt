@@ -6,7 +6,9 @@ import com.aram.core.domain.repository.LedgerLookup
 import com.aram.core.domain.repository.TransactionRepository
 import com.aram.core.domain.transaction.TransactionDraft
 import com.aram.core.domain.transaction.TransactionField
+import com.aram.core.domain.transaction.TransferDraft
 import com.aram.core.domain.usecase.CreateTransaction
+import com.aram.core.domain.usecase.CreateTransfer
 import com.aram.core.model.Account
 import com.aram.core.model.AccountType
 import com.aram.core.model.AppError
@@ -53,6 +55,7 @@ class AddTransactionViewModelTest {
 
     private fun viewModel() = AddTransactionViewModel(
         createTransaction = CreateTransaction(repository, FakeLedgerLookup()),
+        createTransfer = CreateTransfer(repository, FakeLedgerLookup()),
         directory = FakeLedgerDirectory(accounts, categories),
     )
 
@@ -190,6 +193,94 @@ class AddTransactionViewModelTest {
         assertEquals(80, repository.createdDraft?.note?.length ?: -1)
     }
 
+    @Test
+    fun `switching to transfer preselects a same-currency destination`() = runTest(dispatcher) {
+        accounts.value = listOf(cash, card)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onTypeChange(TransactionType.TRANSFER)
+
+        val state = viewModel.uiState.value
+        assertEquals(TransactionType.TRANSFER, state.type)
+        assertEquals(cash.id, state.selectedAccountId)
+        assertEquals(card.id, state.transferToAccountId)
+        assertTrue(state.visibleCategories.isEmpty())
+        assertTrue(state.canSave)
+    }
+
+    @Test
+    fun `transfer saves a draft with both accounts`() = runTest(dispatcher) {
+        accounts.value = listOf(cash, card)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onTypeChange(TransactionType.TRANSFER)
+        viewModel.onAmountChange("1250")
+        viewModel.onNoteChange(" Move to card ")
+        viewModel.onSave()
+        advanceUntilIdle()
+
+        val draft = repository.transferDraft
+        assertEquals(cash.id, draft?.fromAccountId)
+        assertEquals(card.id, draft?.toAccountId)
+        assertEquals(125_000L, draft?.amountMinor)
+        assertEquals("Move to card", draft?.note?.trim())
+        assertTrue(viewModel.uiState.value.saved)
+    }
+
+    @Test
+    fun `transfer between different currencies blocks saving`() = runTest(dispatcher) {
+        accounts.value = listOf(cash, card.copy(currencyCode = "IRR"))
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onTypeChange(TransactionType.TRANSFER)
+        viewModel.onTransferAccountSelected(card.id)
+        viewModel.onAmountChange("1250")
+
+        val state = viewModel.uiState.value
+        assertEquals(card.id, state.transferToAccountId)
+        assertTrue(!state.transferCurrenciesMatch)
+        assertTrue(!state.canSave)
+    }
+
+    @Test
+    fun `transfer with mismatched currencies reports a currency problem`() = runTest(dispatcher) {
+        accounts.value = listOf(cash, card.copy(currencyCode = "IRR"))
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onTypeChange(TransactionType.TRANSFER)
+        viewModel.onTransferAccountSelected(card.id)
+        viewModel.onAmountChange("1250")
+        viewModel.onSave()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertTrue(TransactionField.CURRENCY in state.invalidFields)
+        assertNull(repository.transferDraft)
+        assertTrue(!state.saved)
+    }
+
+    @Test
+    fun `transfer to the source account is rejected`() = runTest(dispatcher) {
+        accounts.value = listOf(cash, card)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onTypeChange(TransactionType.TRANSFER)
+        viewModel.onTransferAccountSelected(cash.id)
+        viewModel.onAmountChange("1250")
+
+        assertTrue(!viewModel.uiState.value.canSave)
+        viewModel.onSave()
+        advanceUntilIdle()
+
+        assertTrue(TransactionField.TO_ACCOUNT in viewModel.uiState.value.invalidFields)
+        assertNull(repository.transferDraft)
+    }
+
     private class FakeLedgerDirectory(
         private val accounts: MutableStateFlow<List<Account>>,
         private val categories: MutableStateFlow<List<Category>>,
@@ -210,6 +301,8 @@ class AddTransactionViewModelTest {
 
         var createdDraft: TransactionDraft? = null
         var createResult: Outcome<Transaction> = Outcome.Success(saved)
+        var transferDraft: TransferDraft? = null
+        var transferResult: Outcome<String> = Outcome.Success("group-1")
 
         override fun observeTransactions(
             fromInclusive: Long,
@@ -223,6 +316,11 @@ class AddTransactionViewModelTest {
         override suspend fun create(draft: TransactionDraft): Outcome<Transaction> {
             createdDraft = draft
             return createResult
+        }
+
+        override suspend fun createTransfer(draft: TransferDraft): Outcome<String> {
+            transferDraft = draft
+            return transferResult
         }
 
         override suspend fun update(id: String, draft: TransactionDraft): Outcome<Transaction> =
@@ -240,6 +338,16 @@ class AddTransactionViewModelTest {
             openingBalanceMinor = 0L,
             colorArgb = 0,
             iconKey = "wallet",
+            archived = false,
+        )
+        val card = Account(
+            id = "card",
+            name = "Card",
+            type = AccountType.BANK,
+            currencyCode = "USD",
+            openingBalanceMinor = 0L,
+            colorArgb = 0,
+            iconKey = "card",
             archived = false,
         )
         val food = Category(

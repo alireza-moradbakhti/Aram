@@ -160,34 +160,44 @@ class TransactionsViewModel @Inject constructor(
         val currency = displayCurrency(rows, accounts)
         val fractionDigits = currency.fractionDigits
 
-        val groups = rows
-            .filter { scope.accepts(it.type) }
+        val visibleRows = rows.filter { scope.accepts(it.type) }
+        val transferPeers = transferPeerAccountIds(rows)
+        val displayRows = collapseTransferPairs(visibleRows)
+
+        val groups = displayRows
             .sortedByDescending(Transaction::occurredAt)
             .groupBy { it.occurredAt.toLocalDate() }
             .toSortedMap(compareByDescending { it })
             .map { (date, dayRows) ->
                 val outflow = dayRows
                     .filter { it.type != TransactionType.INCOME }
-                    .sumOf(Transaction::amountMinor)
+                    .sumOf { -it.displayAmountMinor() }
                 val inflow = dayRows
                     .filter { it.type == TransactionType.INCOME }
                     .sumOf(Transaction::amountMinor)
                 DayGroupUi(
                     date = date,
                     totalMinor = if (outflow > 0) -outflow else inflow,
-                    transactions = dayRows.map { it.toRow(accountsById, categoriesById, fractionDigits) },
+                    transactions = dayRows.map { row ->
+                        row.toRow(
+                            accounts = accountsById,
+                            categories = categoriesById,
+                            fractionDigits = fractionDigits,
+                            transferPeerAccountId = transferPeers[row.id],
+                        )
+                    },
                 )
             }
 
         val inDisplayCurrency = rows.filter { it.currencyOrNull() == currency }
         val spent = inDisplayCurrency
-            .filter { it.type != TransactionType.INCOME }
+            .filter { it.type == TransactionType.EXPENSE }
             .sumOf(Transaction::amountMinor)
         val income = inDisplayCurrency
             .filter { it.type == TransactionType.INCOME }
             .sumOf(Transaction::amountMinor)
         val previousSpent = previousRows
-            .filter { it.currencyOrNull() == currency && it.type != TransactionType.INCOME }
+            .filter { it.currencyOrNull() == currency && it.type == TransactionType.EXPENSE }
             .sumOf(Transaction::amountMinor)
 
         return TransactionsUiState(
@@ -197,12 +207,39 @@ class TransactionsViewModel @Inject constructor(
             loading = false,
             currency = currency,
             groups = groups,
-            entryCount = rows.size,
+            entryCount = collapseTransferPairs(rows).size,
             spentMinor = spent,
             incomeMinor = income,
             incomeCount = rows.count { it.type == TransactionType.INCOME },
             previousSpentMinor = previousSpent.takeIf { it > 0 },
         )
+    }
+
+    /** One transfer group is one visible entry: the source (negative) leg. */
+    private fun collapseTransferPairs(rows: List<Transaction>): List<Transaction> {
+        val hiddenIds = rows
+            .filter { it.type == TransactionType.TRANSFER && it.transferGroupId != null }
+            .filter { it.amountMinor >= 0 }
+            .map(Transaction::id)
+            .toSet()
+        return rows.filter { it.id !in hiddenIds }
+    }
+
+    /** Leg id → the other account's id, so a row can name its destination. */
+    private fun transferPeerAccountIds(rows: List<Transaction>): Map<String, String> = rows
+        .filter { it.type == TransactionType.TRANSFER && it.transferGroupId != null }
+        .groupBy { it.transferGroupId }
+        .flatMap { (_, legs) ->
+            legs.flatMap { leg ->
+                legs.filter { it.id != leg.id }.map { peer -> leg.id to peer.accountId }
+            }
+        }
+        .toMap()
+
+    private fun Transaction.displayAmountMinor(): Long = when (type) {
+        TransactionType.INCOME -> amountMinor
+        TransactionType.EXPENSE -> -amountMinor
+        TransactionType.TRANSFER -> amountMinor
     }
 
     private fun displayCurrency(rows: List<Transaction>, accounts: List<Account>): CurrencyCode {
@@ -227,9 +264,15 @@ class TransactionsViewModel @Inject constructor(
         accounts: Map<String, Account>,
         categories: Map<String, Category>,
         fractionDigits: Int,
+        transferPeerAccountId: String? = null,
     ): TransactionRowUi {
+        val isTransfer = type == TransactionType.TRANSFER
         val category = categoryId?.let(categories::get)
-        val account = accounts[accountId]
+        val account = if (isTransfer) {
+            transferPeerAccountId?.let(accounts::get)
+        } else {
+            accounts[accountId]
+        }
         val incoming = type == TransactionType.INCOME
         val categoryLabel = category?.name ?: type.label()
         val title = note?.takeIf { it.isNotBlank() } ?: categoryLabel
@@ -242,8 +285,8 @@ class TransactionsViewModel @Inject constructor(
             id = id,
             title = title,
             detail = detail,
-            categoryIconKey = category?.iconKey,
-            amountMinor = if (incoming) amountMinor else -amountMinor,
+            categoryIconKey = if (isTransfer) "wallet" else category?.iconKey,
+            amountMinor = displayAmountMinor(),
             fractionDigits = fractionDigits,
             incoming = incoming,
             pendingSync = pendingPush,

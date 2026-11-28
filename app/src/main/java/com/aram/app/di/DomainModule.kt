@@ -3,6 +3,7 @@ package com.aram.app.di
 import com.aram.core.domain.repository.LedgerLookup
 import com.aram.core.domain.repository.TransactionRepository
 import com.aram.core.domain.usecase.CreateTransaction
+import com.aram.core.domain.usecase.CreateTransfer
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -20,6 +21,13 @@ object DomainModule {
         repository: TransactionRepository,
         lookup: LedgerLookup,
     ): CreateTransaction = CreateTransaction(repository, lookup)
+
+    @Provides
+    @Singleton
+    fun provideCreateTransfer(
+        repository: TransactionRepository,
+        lookup: LedgerLookup,
+    ): CreateTransfer = CreateTransfer(repository, lookup)
 
     @Provides
     @Singleton

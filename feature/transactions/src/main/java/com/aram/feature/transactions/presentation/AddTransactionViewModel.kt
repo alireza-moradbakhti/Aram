@@ -7,7 +7,10 @@ import com.aram.core.domain.repository.LedgerDirectory
 import com.aram.core.domain.transaction.TransactionDraft
 import com.aram.core.domain.transaction.TransactionField
 import com.aram.core.domain.transaction.TransactionWriteResult
+import com.aram.core.domain.transaction.TransferDraft
+import com.aram.core.domain.transaction.TransferWriteResult
 import com.aram.core.domain.usecase.CreateTransaction
+import com.aram.core.domain.usecase.CreateTransfer
 import com.aram.core.model.Account
 import com.aram.core.model.Category
 import com.aram.core.model.CategoryKind
@@ -44,6 +47,7 @@ data class AddTransactionUiState(
     val currency: CurrencyCode = CurrencyCode.USD,
     val accounts: List<Account> = emptyList(),
     val selectedAccountId: String? = null,
+    val transferToAccountId: String? = null,
     val categories: List<Category> = emptyList(),
     val selectedCategoryId: String? = null,
     val occurredOn: LocalDate = LocalDate.now(),
@@ -57,17 +61,37 @@ data class AddTransactionUiState(
     val selectedAccount: Account?
         get() = accounts.firstOrNull { it.id == selectedAccountId }
 
+    val transferToAccount: Account?
+        get() = accounts.firstOrNull { it.id == transferToAccountId }
+
     val visibleCategories: List<Category>
         get() = categories.filter { it.kind == type.categoryKind }
 
+    val isTransfer: Boolean get() = type == TransactionType.TRANSFER
+
+    val transferCurrenciesMatch: Boolean
+        get() {
+            val source = selectedAccount ?: return false
+            val destination = transferToAccount ?: return false
+            return source.currencyCode == destination.currencyCode
+        }
+
     val canSave: Boolean
-        get() = optionsLoaded && accounts.isNotEmpty() &&
-            submitState !is SubmitState.Submitting && !saved
+        get() {
+            val ready = optionsLoaded && accounts.isNotEmpty() &&
+                submitState !is SubmitState.Submitting && !saved
+            if (!ready) return false
+            if (!isTransfer) return true
+            val source = selectedAccount ?: return false
+            val destination = transferToAccount ?: return false
+            return source.id != destination.id && transferCurrenciesMatch
+        }
 }
 
 @HiltViewModel
 class AddTransactionViewModel @Inject constructor(
     private val createTransaction: CreateTransaction,
+    private val createTransfer: CreateTransfer,
     directory: LedgerDirectory,
 ) : ViewModel() {
 
@@ -85,9 +109,23 @@ class AddTransactionViewModel @Inject constructor(
     }
 
     fun onTypeChange(type: TransactionType) {
-        if (type == TransactionType.TRANSFER) return
         _uiState.update { state ->
             if (state.type == type) return@update state
+            if (type == TransactionType.TRANSFER) {
+                val source = state.selectedAccount
+                val destination = state.accounts.firstOrNull {
+                    it.id != source?.id && it.currencyCode == source?.currencyCode
+                }
+                return@update state.copy(
+                    type = type,
+                    transferToAccountId = destination?.id,
+                    invalidFields = state.invalidFields -
+                        TransactionField.CATEGORY -
+                        TransactionField.TO_ACCOUNT -
+                        TransactionField.CURRENCY,
+                    submitState = SubmitState.Idle,
+                )
+            }
             val matching = state.categories.filter { it.kind == type.categoryKind }
             state.copy(
                 type = type,
@@ -113,8 +151,25 @@ class AddTransactionViewModel @Inject constructor(
             val account = state.accounts.firstOrNull { it.id == accountId } ?: return@update state
             state.copy(
                 selectedAccountId = account.id,
+                transferToAccountId = state.transferToAccountId?.takeIf { it != account.id },
                 currency = currencyOf(account),
-                invalidFields = state.invalidFields - TransactionField.ACCOUNT,
+                invalidFields = state.invalidFields -
+                    TransactionField.ACCOUNT -
+                    TransactionField.TO_ACCOUNT -
+                    TransactionField.CURRENCY,
+                submitState = SubmitState.Idle,
+            )
+        }
+    }
+
+    fun onTransferAccountSelected(accountId: String) {
+        _uiState.update { state ->
+            if (state.accounts.none { it.id == accountId }) return@update state
+            state.copy(
+                transferToAccountId = accountId,
+                invalidFields = state.invalidFields -
+                    TransactionField.TO_ACCOUNT -
+                    TransactionField.CURRENCY,
                 submitState = SubmitState.Idle,
             )
         }
@@ -142,6 +197,10 @@ class AddTransactionViewModel @Inject constructor(
     fun onSave() {
         val state = _uiState.value
         if (state.submitState is SubmitState.Submitting || state.saved) return
+        if (state.isTransfer) {
+            saveTransfer(state)
+            return
+        }
 
         val parsed = AmountParser.parse(state.amountInput, state.currency)
         val amountError = parsed.toInputError()
@@ -167,11 +226,7 @@ class AddTransactionViewModel @Inject constructor(
             type = state.type,
             amountMinor = parsed.money.amountMinor,
             currencyCode = state.currency.isoCode,
-            occurredAt = state.occurredOn
-                .atTime(LocalTime.now())
-                .atZone(ZoneId.systemDefault())
-                .toInstant()
-                .toEpochMilli(),
+            occurredAt = state.occurredAt(),
             note = state.note.takeIf { it.isNotBlank() },
         )
 
@@ -196,6 +251,61 @@ class AddTransactionViewModel @Inject constructor(
         }
     }
 
+    private fun saveTransfer(state: AddTransactionUiState) {
+        val parsed = AmountParser.parse(state.amountInput, state.currency)
+        val amountError = parsed.toInputError()
+        val source = state.selectedAccount
+        val destination = state.transferToAccount
+        if (parsed !is AmountParseResult.Valid || source == null || destination == null) {
+            _uiState.update {
+                it.copy(
+                    amountError = amountError,
+                    invalidFields = buildSet {
+                        if (amountError != null) add(TransactionField.AMOUNT)
+                        if (source == null) add(TransactionField.ACCOUNT)
+                        if (destination == null) add(TransactionField.TO_ACCOUNT)
+                    },
+                )
+            }
+            return
+        }
+
+        val draft = TransferDraft(
+            fromAccountId = source.id,
+            toAccountId = destination.id,
+            amountMinor = parsed.money.amountMinor,
+            currencyCode = state.currency.isoCode,
+            occurredAt = state.occurredAt(),
+            note = state.note.takeIf { it.isNotBlank() },
+        )
+
+        _uiState.update { it.copy(submitState = SubmitState.Submitting) }
+        viewModelScope.launch {
+            when (val result = createTransfer(draft)) {
+                is TransferWriteResult.Success -> _uiState.update {
+                    it.copy(submitState = SubmitState.Idle, saved = true)
+                }
+
+                is TransferWriteResult.Invalid -> _uiState.update {
+                    it.copy(
+                        submitState = SubmitState.Idle,
+                        invalidFields = result.problems.keys,
+                    )
+                }
+
+                is TransferWriteResult.Failed -> _uiState.update {
+                    it.copy(submitState = SubmitState.Failed(result.error))
+                }
+            }
+        }
+    }
+
+    private fun AddTransactionUiState.occurredAt(): Long = occurredOn
+        .atTime(LocalTime.now())
+        .atZone(ZoneId.systemDefault())
+        .toInstant()
+        .toEpochMilli()
+
     private fun onDirectoryChanged(accounts: List<Account>, categories: List<Category>) {
         _uiState.update { state ->
             val account = accounts.firstOrNull { it.id == state.selectedAccountId }
@@ -203,9 +313,21 @@ class AddTransactionViewModel @Inject constructor(
             val matching = categories.filter { it.kind == state.type.categoryKind }
             val category = matching.firstOrNull { it.id == state.selectedCategoryId }
                 ?: matching.firstOrNull()
+            val destinationId = if (state.isTransfer) {
+                (
+                    accounts.firstOrNull {
+                        it.id == state.transferToAccountId && it.id != account?.id
+                    } ?: accounts.firstOrNull {
+                        it.id != account?.id && it.currencyCode == account?.currencyCode
+                    }
+                    )?.id
+            } else {
+                state.transferToAccountId?.takeIf { id -> accounts.any { it.id == id } }
+            }
             state.copy(
                 accounts = accounts,
                 selectedAccountId = account?.id,
+                transferToAccountId = destinationId,
                 categories = categories,
                 selectedCategoryId = category?.id,
                 currency = account?.let(::currencyOf) ?: state.currency,
