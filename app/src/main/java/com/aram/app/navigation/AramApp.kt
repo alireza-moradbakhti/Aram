@@ -191,7 +191,6 @@ private fun MainScaffold(
                     DashboardRoute(
                         displayName = profile.displayName,
                         onSeeAll = { navigateTo(MainTab.Activity) },
-                        onExplainSafeToSpend = {},
                     )
                 }
                 composable(MainTab.Activity.route) {

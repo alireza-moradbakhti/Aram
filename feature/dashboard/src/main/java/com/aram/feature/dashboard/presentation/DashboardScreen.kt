@@ -32,6 +32,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -84,18 +87,25 @@ fun DashboardRoute(
     displayName: String,
     modifier: Modifier = Modifier,
     onSeeAll: () -> Unit = {},
-    onExplainSafeToSpend: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    var explainerVisible by rememberSaveable { mutableStateOf(false) }
     DashboardScreen(
         displayName = displayName,
         state = state,
-        onExplainSafeToSpend = onExplainSafeToSpend,
+        onExplainSafeToSpend = { explainerVisible = true },
         onSeeAll = onSeeAll,
         onRetry = viewModel::retry,
         modifier = modifier,
     )
+    if (explainerVisible) {
+        SafeToSpendExplainerSheet(
+            result = state.safeToSpend,
+            month = state.month,
+            onDismiss = { explainerVisible = false },
+        )
+    }
 }
 
 @Composable
