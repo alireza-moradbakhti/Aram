@@ -1,12 +1,15 @@
 package com.aram.feature.dashboard.presentation
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -38,9 +41,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -65,6 +70,10 @@ import com.aram.core.designsystem.component.AramSectionHeader
 import com.aram.core.designsystem.component.GlassCard
 import com.aram.core.designsystem.component.MoneyLabel
 import com.aram.core.designsystem.icon.AramIcons
+import com.aram.core.designsystem.text.formatMinor
+
+private val DONUT_STROKE = 18.dp
+private const val LEGEND_LIMIT = 4
 
 @Composable
 fun DashboardRoute(
@@ -77,6 +86,7 @@ fun DashboardRoute(
     DashboardScreen(
         displayName = displayName,
         isLoading = state.isLoading,
+        donut = state.donut,
         onSeeAll = onSeeAll,
         modifier = modifier,
     )
@@ -87,6 +97,7 @@ fun DashboardScreen(
     displayName: String,
     modifier: Modifier = Modifier,
     isLoading: Boolean = false,
+    donut: DonutUiState = DonutUiState(),
     onSeeAll: () -> Unit = {},
 ) {
     Column(
@@ -104,7 +115,7 @@ fun DashboardScreen(
             if (loading) {
                 DashboardSkeleton(modifier = Modifier.testTag(SKELETON_TAG))
             } else {
-                DashboardContent(displayName = displayName, onSeeAll = onSeeAll)
+                DashboardContent(displayName = displayName, donut = donut, onSeeAll = onSeeAll)
             }
         }
     }
@@ -113,6 +124,7 @@ fun DashboardScreen(
 @Composable
 private fun DashboardContent(
     displayName: String,
+    donut: DonutUiState,
     onSeeAll: () -> Unit,
 ) {
     val colors = MaterialTheme.aramColors
@@ -240,6 +252,10 @@ private fun DashboardContent(
 
         Spacer(Modifier.height(12.dp))
 
+        SpendingDonutCard(donut = donut)
+
+        Spacer(Modifier.height(12.dp))
+
         GlassCard(shape = RoundedCornerShape(22.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -252,6 +268,135 @@ private fun DashboardContent(
             Spacer(Modifier.height(14.dp))
             WeekChart()
         }
+    }
+}
+
+@Composable
+private fun SpendingDonutCard(donut: DonutUiState, modifier: Modifier = Modifier) {
+    GlassCard(
+        shape = RoundedCornerShape(22.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(text = "Where it went", style = MaterialTheme.typography.titleMedium)
+            if (donut.monthLabel.isNotEmpty()) {
+                AramChip(text = donut.monthLabel, tone = AramChipTone.Neutral)
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SpendingDonut(donut = donut, modifier = Modifier.size(132.dp))
+            Spacer(Modifier.width(16.dp))
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                if (donut.isEmpty) {
+                    Text(
+                        text = "No expenses yet this month",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.aramColors.textDim,
+                    )
+                } else {
+                    donut.slices.take(LEGEND_LIMIT).forEach { slice ->
+                        DonutLegendRow(slice = slice, fractionDigits = donut.fractionDigits)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SpendingDonut(donut: DonutUiState, modifier: Modifier = Modifier) {
+    val colors = MaterialTheme.aramColors
+    val sweepProgress by animateFloatAsState(
+        targetValue = 1f,
+        animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing),
+        label = "donut-sweep",
+    )
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val strokePx = DONUT_STROKE.toPx()
+            val inset = strokePx / 2f
+            val arcSize = Size(size.width - strokePx, size.height - strokePx)
+            drawArc(
+                color = colors.border,
+                startAngle = 0f,
+                sweepAngle = 360f,
+                useCenter = false,
+                topLeft = Offset(inset, inset),
+                size = arcSize,
+                style = Stroke(strokePx, cap = StrokeCap.Butt),
+            )
+            var cursor = -90f
+            donut.slices.forEach { slice ->
+                val sweep = slice.sweepAngle * sweepProgress
+                if (sweep > 0f) {
+                    drawArc(
+                        color = if (slice.colorArgb == 0) colors.primaryHi else Color(slice.colorArgb),
+                        startAngle = cursor,
+                        sweepAngle = sweep,
+                        useCenter = false,
+                        topLeft = Offset(inset, inset),
+                        size = arcSize,
+                        style = Stroke(strokePx, cap = StrokeCap.Butt),
+                    )
+                }
+                cursor += sweep
+            }
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = formatMinor(donut.totalMinor, donut.fractionDigits),
+                style = MaterialTheme.typography.titleSmall,
+            )
+            Text(
+                text = "spent",
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.textFaint,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DonutLegendRow(slice: DonutSlice, fractionDigits: Int) {
+    val colors = MaterialTheme.aramColors
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(if (slice.colorArgb == 0) colors.primaryHi else Color(slice.colorArgb)),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = slice.label,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "${slice.percent}%",
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.textFaint,
+            )
+        }
+        Text(
+            text = formatMinor(slice.amountMinor, fractionDigits),
+            style = MaterialTheme.typography.labelSmall,
+            color = colors.textDim,
+            modifier = Modifier.padding(start = 16.dp),
+        )
     }
 }
 
