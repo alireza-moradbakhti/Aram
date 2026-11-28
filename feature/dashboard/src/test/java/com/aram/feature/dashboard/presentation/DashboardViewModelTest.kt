@@ -1,5 +1,6 @@
 package com.aram.feature.dashboard.presentation
 
+import app.cash.turbine.test
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -27,6 +28,18 @@ class DashboardViewModelTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `uiState streams loading then content`() = runTest(dispatcher) {
+        val viewModel = DashboardViewModel()
+
+        viewModel.uiState.test {
+            assertTrue(awaitItem().isLoading)
+            advanceUntilIdle()
+            assertFalse(awaitItem().isLoading)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test

@@ -1,9 +1,12 @@
 package com.aram.feature.transactions.presentation
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import com.aram.core.designsystem.AramTheme
 import com.aram.core.domain.repository.OutboxSnapshot
 import com.aram.core.money.CurrencyCode
@@ -74,6 +77,127 @@ class TransactionsScreenTest {
         compose.onNodeWithText("Queued").assertExists()
     }
 
+    @Test
+    fun `the search icon reveals a field that forwards typing`() {
+        var query = ""
+        setScreen(state(), onSearchQueryChange = { query = it })
+
+        compose.onNodeWithContentDescription("Search transactions").performClick()
+        compose.onNodeWithText("Search notes").assertIsDisplayed()
+        compose.onNode(hasSetTextAction()).performTextInput("coffee")
+
+        assertEquals("coffee", query)
+    }
+
+    @Test
+    fun `results mode hides month navigation and stats`() {
+        setScreen(
+            state(
+                groups = listOf(
+                    DayGroupUi(
+                        date = LocalDate.of(2026, 11, 20),
+                        totalMinor = -12_000,
+                        transactions = listOf(
+                            TransactionRowUi(
+                                id = "tx-1",
+                                title = "Coffee",
+                                detail = "Food & Drinks",
+                                categoryIconKey = "food",
+                                amountMinor = -12_000,
+                                fractionDigits = 2,
+                                incoming = false,
+                            ),
+                        ),
+                    ),
+                ),
+            ).copy(isFiltering = true, query = "coffee", entryCount = 1),
+        )
+
+        compose.onNodeWithText("1 result").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Previous month").assertDoesNotExist()
+        compose.onNodeWithText("SPENT").assertDoesNotExist()
+    }
+
+    @Test
+    fun `applied filters render as chips`() {
+        setScreen(
+            state().copy(
+                scope = TransactionScope.EXPENSES,
+                filters = TransactionFiltersUi(
+                    categoryId = "food",
+                    dateRange = DateRangePreset.LAST_30_DAYS,
+                ),
+                categories = listOf(CategoryOptionUi("food", "Food & Drinks", "food")),
+                isFiltering = true,
+                query = "coffee",
+            ),
+        )
+
+        compose.onNodeWithText("Food & Drinks").assertExists()
+        compose.onNodeWithText("Last 30 days").assertExists()
+        compose.onNodeWithText("Clear all").assertExists()
+    }
+
+    @Test
+    fun `no matches card names the query and clears everything`() {
+        var clears = 0
+        setScreen(
+            state().copy(
+                isFiltering = true,
+                noMatches = true,
+                query = "coffee",
+            ),
+            onClearFilters = { clears++ },
+        )
+
+        compose.onNodeWithText("No matches for \u201Ccoffee\u201D").assertIsDisplayed()
+        compose.onNodeWithText("Clear filters").performClick()
+
+        assertEquals(1, clears)
+    }
+
+    @Test
+    fun `tapping a row opens that transaction`() {
+        var openedId: String? = null
+        compose.setContent {
+            AramTheme(darkTheme = true) {
+                TransactionsScreen(
+                    state = state(
+                        groups = listOf(
+                            DayGroupUi(
+                                date = LocalDate.of(2026, 11, 20),
+                                totalMinor = 12_000,
+                                transactions = listOf(
+                                    TransactionRowUi(
+                                        id = "tx-1",
+                                        title = "Groceries",
+                                        detail = "Food & Drinks",
+                                        categoryIconKey = "food",
+                                        amountMinor = 12_000,
+                                        fractionDigits = 2,
+                                        incoming = false,
+                                        pendingSync = false,
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                    onPreviousMonth = {},
+                    onNextMonth = {},
+                    onScopeChange = {},
+                    onAddTransaction = {},
+                    onTransactionClick = { openedId = it },
+                    onRefresh = {},
+                    onRetryQueued = {},
+                )
+            }
+        }
+
+        compose.onNodeWithText("Groceries").performClick()
+
+        assertEquals("tx-1", openedId)
+    }
+
     private fun state(
         outbox: OutboxSnapshot = OutboxSnapshot(),
         groups: List<DayGroupUi> = emptyList(),
@@ -87,7 +211,11 @@ class TransactionsScreenTest {
         outbox = outbox,
     )
 
-    private fun setScreen(state: TransactionsUiState) {
+    private fun setScreen(
+        state: TransactionsUiState,
+        onSearchQueryChange: (String) -> Unit = {},
+        onClearFilters: () -> Unit = {},
+    ) {
         compose.setContent {
             AramTheme(darkTheme = true) {
                 TransactionsScreen(
@@ -98,6 +226,8 @@ class TransactionsScreenTest {
                     onAddTransaction = {},
                     onRefresh = { refreshes++ },
                     onRetryQueued = { retries++ },
+                    onSearchQueryChange = onSearchQueryChange,
+                    onClearFilters = onClearFilters,
                 )
             }
         }
