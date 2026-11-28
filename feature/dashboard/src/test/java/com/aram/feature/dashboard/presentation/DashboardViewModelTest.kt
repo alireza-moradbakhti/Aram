@@ -3,6 +3,8 @@ package com.aram.feature.dashboard.presentation
 import com.aram.core.domain.repository.LedgerDirectory
 import com.aram.core.domain.repository.TransactionRepository
 import com.aram.core.domain.transaction.TransactionDraft
+import com.aram.core.domain.transaction.TransactionFilter
+import com.aram.core.domain.transaction.TransferDraft
 import com.aram.core.model.Account
 import com.aram.core.model.AccountType
 import com.aram.core.model.Category
@@ -221,11 +223,17 @@ private class FakeTransactionRepository : TransactionRepository {
 
     override fun observeTransaction(id: String): Flow<Transaction?> = flowOf(null)
 
+    override fun search(filter: TransactionFilter): Flow<List<Transaction>> = flowOf(emptyList())
+
+    override suspend fun createTransfer(draft: TransferDraft): Outcome<String> = error("not used")
+
     override suspend fun create(draft: TransactionDraft): Outcome<Transaction> = error("not used")
 
     override suspend fun update(id: String, draft: TransactionDraft): Outcome<Transaction> = error("not used")
 
     override suspend fun softDelete(id: String): Outcome<Unit> = error("not used")
+
+    override suspend fun restore(id: String): Outcome<Unit> = error("not used")
 }
 
 private class FakeLedgerDirectory(
