@@ -12,6 +12,7 @@ import com.aram.app.crash.CrashMarker
 import com.aram.app.crash.RecoveryScreen
 import com.aram.app.navigation.AramApp
 import com.aram.app.session.MainViewModel
+import com.aram.app.session.TransactionUndoViewModel
 import com.aram.core.designsystem.AramTheme
 import com.aram.core.designsystem.state.UiState
 import com.aram.core.network.config.ApiMode
@@ -25,6 +26,7 @@ import javax.inject.Inject
 class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
+    private val undoViewModel: TransactionUndoViewModel by viewModels()
 
     @Inject
     lateinit var mockScenarios: MockScenarioController
@@ -63,6 +65,7 @@ class MainActivity : ComponentActivity() {
                         sessionState = session,
                         onRetrySession = viewModel::retry,
                         onSignOut = viewModel::signOut,
+                        onUndoDelete = undoViewModel::restore,
                         showDebugActions = BuildConfig.DEBUG,
                         debugScenario = scenario.takeIf { BuildConfig.DEBUG && isMockBuild },
                         onSelectDebugScenario = mockScenarios::select,

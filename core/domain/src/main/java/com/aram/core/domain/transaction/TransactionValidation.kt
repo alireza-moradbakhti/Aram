@@ -8,6 +8,7 @@ import com.aram.core.model.Transaction
 enum class TransactionField {
     AMOUNT,
     ACCOUNT,
+    TO_ACCOUNT,
     CATEGORY,
     CURRENCY,
 }
